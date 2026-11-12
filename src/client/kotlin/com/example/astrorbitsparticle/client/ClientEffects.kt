@@ -69,6 +69,10 @@ object ClientEffects {
 			baseAge = baseAge,
 			receivedNanos = System.nanoTime(),
 		)
+		AstrorbitsParticle.logger.info(
+			"[effect] client start id={} style={} particles={}",
+			payload.effectId, definition.style, bound.count,
+		)
 	}
 
 	fun stop(payload: EffectStopPayload) {

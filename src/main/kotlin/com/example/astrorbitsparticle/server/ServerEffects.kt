@@ -62,14 +62,14 @@ object ServerEffects {
 	private val sentDefinitions = HashMap<UUID, MutableSet<Int>>()
 	private var scenes: List<Scene> = emptyList()
 	private var nextId = 1L
-	private var lastScan = Long.MIN_VALUE
+	private var lastScan = -SCAN_INTERVAL.toLong()
 
 	fun init(server: MinecraftServer) {
 		this.server = server
 		effects.clear()
 		sentDefinitions.clear()
 		nextId = 1L
-		lastScan = Long.MIN_VALUE
+		lastScan = -SCAN_INTERVAL.toLong()
 		loadConfig()
 	}
 

@@ -25,6 +25,7 @@ private val PARTICLE_ATLAS = Identifier.withDefaultNamespace("particles")
  */
 class EffectParticleGroup(engine: ParticleEngine) : ParticleGroup<Particle>(engine) {
 	private val sprites = HashMap<Identifier, SpriteInfo>()
+	private var loggedFirstFrame = false
 
 	override fun add(particle: Particle): Boolean {
 		if (particle is EffectAnchorParticle) {
@@ -47,6 +48,7 @@ class EffectParticleGroup(engine: ParticleEngine) : ParticleGroup<Particle>(engi
 		val level = Minecraft.getInstance().level ?: return state
 		val cameraPos = camera.position()
 		val rotation = camera.rotation()
+		var quads = 0
 
 		for (effect in ClientEffects.all()) {
 			if (!frustum.isVisible(effect.cullBox)) continue
@@ -72,6 +74,13 @@ class EffectParticleGroup(engine: ParticleEngine) : ParticleGroup<Particle>(engi
 					light,
 				)
 			}
+			quads += buffer.count
+		}
+		if (!loggedFirstFrame && quads > 0) {
+			loggedFirstFrame = true
+			com.example.astrorbitsparticle.AstrorbitsParticle.logger.info(
+				"[effect] first frame: {} quads", quads,
+			)
 		}
 		return state
 	}
