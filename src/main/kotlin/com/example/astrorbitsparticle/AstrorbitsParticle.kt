@@ -1,6 +1,7 @@
 package com.example.astrorbitsparticle
 
 import com.example.astrorbitsparticle.net.ModPayloads
+import com.example.astrorbitsparticle.particle.EffectAnchorOptions
 import com.example.astrorbitsparticle.server.EffectsCommand
 import com.example.astrorbitsparticle.server.ServerEffects
 import com.example.astrorbitsparticle.style.BuiltinStyles
@@ -18,6 +19,7 @@ object AstrorbitsParticle : ModInitializer {
 	val logger = LoggerFactory.getLogger(MOD_ID)
 
 	override fun onInitialize() {
+		EffectAnchorOptions.TYPE
 		BuiltinStyles.registerAll()
 		ModPayloads.register()
 		ServerLifecycleEvents.SERVER_STARTING.register(ServerEffects::init)

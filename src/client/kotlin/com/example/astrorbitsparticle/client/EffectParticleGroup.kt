@@ -1,0 +1,103 @@
+package com.example.astrorbitsparticle.client
+
+import net.minecraft.client.Camera
+import net.minecraft.client.Minecraft
+import net.minecraft.client.multiplayer.ClientLevel
+import net.minecraft.client.particle.Particle
+import net.minecraft.client.particle.ParticleEngine
+import net.minecraft.client.particle.ParticleGroup
+import net.minecraft.client.particle.ParticleRenderType
+import net.minecraft.client.particle.SingleQuadParticle
+import net.minecraft.client.renderer.culling.Frustum
+import net.minecraft.client.renderer.state.level.ParticleGroupRenderState
+import net.minecraft.client.renderer.state.level.QuadParticleRenderState
+import net.minecraft.client.renderer.texture.TextureAtlas
+import net.minecraft.core.BlockPos
+import net.minecraft.resources.Identifier
+
+val EFFECT_RENDER_TYPE = ParticleRenderType("astrorbitsparticle:effect", "AOP")
+
+/**
+ * 所有特效共用一个粒子组：组负责推进年龄、做视锥剔除，
+ * 并把全部粒子写进同一个 QuadParticleRenderState，逐粒子不创建 Particle 对象。
+ */
+class EffectParticleGroup(engine: ParticleEngine) : ParticleGroup<Particle>(engine) {
+	private val sprites = HashMap<Identifier, SpriteInfo>()
+
+	override fun add(particle: Particle): Boolean {
+		if (particle is EffectAnchorParticle) {
+			particle.remove()
+			return false
+		}
+		return super.add(particle)
+	}
+
+	override fun tickParticles() {
+		ClientEffects.tick()
+	}
+
+	override fun isEmpty(): Boolean = ClientEffects.isEmpty()
+
+	override fun size(): Int = ClientEffects.count()
+
+	override fun extractRenderState(frustum: Frustum, camera: Camera, partialTick: Float): ParticleGroupRenderState {
+		val state = QuadParticleRenderState()
+		val level = Minecraft.getInstance().level ?: return state
+		val cameraPos = camera.position()
+		val rotation = camera.rotation()
+
+		for (effect in ClientEffects.all()) {
+			if (!frustum.isVisible(effect.cullBox)) continue
+			val buffer = effect.sample()
+			if (buffer.count == 0) continue
+			val sprite = spriteInfo(effect.bound.appearance.sprite)
+			val light = lightAt(level, effect)
+
+			for (i in 0 until buffer.count) {
+				state.add(
+					sprite.layer,
+					(buffer.x[i] - cameraPos.x).toFloat(),
+					(buffer.y[i] - cameraPos.y).toFloat(),
+					(buffer.z[i] - cameraPos.z).toFloat(),
+					rotation.x, rotation.y, rotation.z, rotation.w,
+					buffer.size[i],
+					sprite.u0, sprite.u1, sprite.v0, sprite.v1,
+					buffer.argb[i],
+					light,
+				)
+			}
+		}
+		return state
+	}
+
+	private fun lightAt(level: ClientLevel, effect: ClientEffect): Int {
+		if (effect.bound.appearance.fullbright) return 0xF000F0
+		val pos = BlockPos.containing(effect.origin)
+		val raw = level.lightEngine.getRawBrightness(pos, 0)
+		return (raw shl 4) or (raw shl 20)
+	}
+
+	private fun spriteInfo(id: Identifier): SpriteInfo = sprites.getOrPut(id) {
+		runCatching {
+			val atlas = Minecraft.getInstance().atlasManager.getAtlasOrThrow(TextureAtlas.LOCATION_PARTICLES)
+			val sprite = atlas.getSprite(id)
+			SpriteInfo(
+				layer = SingleQuadParticle.Layer.bySprite(sprite),
+				u0 = sprite.u0,
+				u1 = sprite.u1,
+				v0 = sprite.v0,
+				v1 = sprite.v1,
+			)
+		}.getOrElse {
+			SpriteInfo(SingleQuadParticle.Layer.TRANSLUCENT, 0f, 1f, 0f, 1f)
+		}
+	}
+
+	private data class SpriteInfo(
+		val layer: SingleQuadParticle.Layer,
+		val u0: Float,
+		val u1: Float,
+		val v0: Float,
+		val v1: Float,
+	)
+}
