@@ -17,19 +17,19 @@
 	"entrypoints": {
 		"main": [
 			{
-				"value": "com.example.astrorbitsparticle.AstrorbitsParticle",
+				"value": "net.astrorbits.AstrorbitsParticle",
 				"adapter": "kotlin"
 			}
 		],
 		"client": [
 			{
-				"value": "com.example.astrorbitsparticle.client.AstrorbitsParticleClient",
+				"value": "net.astrorbits.client.AstrorbitsParticleClient",
 				"adapter": "kotlin"
 			}
 		],
 		"fabric-datagen": [
 			{
-				"value": "com.example.astrorbitsparticle.client.AstrorbitsParticleDataGenerator",
+				"value": "net.astrorbits.client.AstrorbitsParticleDataGenerator",
 				"adapter": "kotlin"
 			}
 		]

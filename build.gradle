@@ -51,7 +51,7 @@ tasks.register('generateStyleDocs', JavaExec) {
 	group = 'documentation'
 	description = 'Generate docs/样式参数.md from the style declarations'
 	classpath = sourceSets.main.runtimeClasspath
-	mainClass = 'com.example.astrorbitsparticle.style.StyleDocGenerator'
+	mainClass = 'net.astrorbits.style.StyleDocGenerator'
 	args layout.projectDirectory.file('docs/样式参数.md').asFile.absolutePath
 	dependsOn tasks.named('classes')
 }
@@ -123,7 +123,7 @@ tasks.register('updateGolden', JavaExec) {
 	group = 'verification'
 	description = 'Rewrite golden samples under golden/'
 	classpath = sourceSets.main.runtimeClasspath
-	mainClass = 'com.example.astrorbitsparticle.style.GoldenSampler'
+	mainClass = 'net.astrorbits.style.GoldenSampler'
 	args layout.projectDirectory.dir('golden').asFile.absolutePath, '--write'
 	dependsOn tasks.named('classes')
 }
@@ -132,7 +132,7 @@ tasks.register('verifyGolden', JavaExec) {
 	group = 'verification'
 	description = 'Compare style output against golden/'
 	classpath = sourceSets.main.runtimeClasspath
-	mainClass = 'com.example.astrorbitsparticle.style.GoldenSampler'
+	mainClass = 'net.astrorbits.style.GoldenSampler'
 	args layout.projectDirectory.dir('golden').asFile.absolutePath
 	dependsOn tasks.named('classes')
 }

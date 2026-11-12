@@ -1,6 +1,6 @@
 {
 	"required": true,
-	"package": "com.example.astrorbitsparticle.client.mixin",
+	"package": "net.astrorbits.client.mixin",
 	"compatibilityLevel": "JAVA_25",
 	"client": [
 		"ExampleClientMixin"
