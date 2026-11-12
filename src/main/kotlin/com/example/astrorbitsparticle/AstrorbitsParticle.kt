@@ -19,6 +19,7 @@ object AstrorbitsParticle : ModInitializer {
 	val logger = LoggerFactory.getLogger(MOD_ID)
 
 	override fun onInitialize() {
+		com.example.astrorbitsparticle.config.ModConfig.load()
 		EffectAnchorOptions.TYPE
 		BuiltinStyles.registerAll()
 		ModPayloads.register()

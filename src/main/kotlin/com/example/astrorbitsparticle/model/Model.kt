@@ -108,7 +108,8 @@ data class EffectDefinition(
 			val window = obj.getAsJsonArray("window")
 			return Emission(
 				mode = EmissionMode.parse(obj.string("mode", "burst")),
-				count = obj.int("count", 200).coerceIn(1, MAX_COUNT),
+				count = obj.int("count", 200)
+					.coerceIn(1, com.example.astrorbitsparticle.config.ModConfig.maxParticlesPerEffect),
 				windowStart = window?.getOrNull(0)?.asFloat ?: 0f,
 				windowEnd = window?.getOrNull(1)?.asFloat ?: 0f,
 				jitter = obj.float("jitter", 0f),

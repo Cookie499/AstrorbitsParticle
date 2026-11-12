@@ -25,9 +25,6 @@ val EFFECT_RENDER_TYPE = ParticleRenderType("astrorbitsparticle:effect", "AOP")
 
 private val PARTICLE_ATLAS = Identifier.withDefaultNamespace("textures/atlas/particles.png")
 
-private const val MAX_VISIBLE_PARTICLES = 20000
-private const val MAX_VISIBLE_EFFECTS = 64
-private const val FRAME_BUDGET_MS = 4f
 private const val MAX_STRIDE = 4
 private const val LOD_NEAR = 24f
 private const val LOD_FAR = 96f
@@ -86,10 +83,10 @@ class EffectParticleGroup(engine: ParticleEngine) : ParticleGroup<Particle>(engi
 		val visible = ClientEffects.all()
 			.filter { frustum.isVisible(it.cullBox) }
 			.sortedBy { it.origin.distanceToSqr(cameraPos) }
-			.take(MAX_VISIBLE_EFFECTS)
+			.take(com.example.astrorbitsparticle.config.ModConfig.maxVisibleEffects)
 		val planned = visible.sumOf { it.bound.count }
-		val budgetStride = if (planned > MAX_VISIBLE_PARTICLES) {
-			kotlin.math.ceil(planned.toFloat() / MAX_VISIBLE_PARTICLES).toInt().coerceIn(1, MAX_STRIDE)
+		val budgetStride = if (planned > com.example.astrorbitsparticle.config.ModConfig.maxVisibleParticles) {
+			kotlin.math.ceil(planned.toFloat() / com.example.astrorbitsparticle.config.ModConfig.maxVisibleParticles).toInt().coerceIn(1, MAX_STRIDE)
 		} else {
 			1
 		}
@@ -178,10 +175,10 @@ class EffectParticleGroup(engine: ParticleEngine) : ParticleGroup<Particle>(engi
 
 	/** 单帧超过预算就加步长，连续轻载再逐步降回来。 */
 	private fun adapt(elapsedMs: Float) {
-		if (elapsedMs > FRAME_BUDGET_MS) {
+		if (elapsedMs > com.example.astrorbitsparticle.config.ModConfig.frameBudgetMs) {
 			slowFrames++
 			fastFrames = 0
-		} else if (elapsedMs < FRAME_BUDGET_MS * 0.5f) {
+		} else if (elapsedMs < com.example.astrorbitsparticle.config.ModConfig.frameBudgetMs * 0.5f) {
 			fastFrames++
 			slowFrames = 0
 		} else {
