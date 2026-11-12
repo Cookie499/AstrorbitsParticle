@@ -116,7 +116,7 @@ object Rain : ParticleStyle {
 			vecSpec("direction", 0.12f, -1f, 0f, "下落方向，内部归一化"),
 			numbersSpec("speedRange", floatArrayOf(14f, 22f), "速度区间 [最小, 最大]（块/秒），差速来源"),
 			vecSpec("area", 26f, 18f, 26f, "降雨体积（块）"),
-			numSpec("streakLength", 0.8f, "拖尾拉伸时长（秒），当前未实现", "0..10", 0f, 10f),
+			numSpec("streakLength", 0.8f, "旧参数，保留未使用；拖尾改用 appearance.stretch", "0..10", 0f, 10f),
 			intSpec("trailCount", 0, "每条雨丝额外挂的尾迹粒子数", "0..16", 0f, 16f),
 			numSpec("trailSpread", 0.08f, "尾迹逐段横向扩散（块）", "0..4", 0f, 4f),
 			boolSpec("wrap", true, "是否在体积内循环"),
@@ -189,6 +189,12 @@ object Rain : ParticleStyle {
 				)
 			}
 		}
+	}
+
+	override fun stretchVector(effect: BoundEffect, age: Float): Vec3 {
+		val params = effect.styleParams as Params
+		val dir = if (params.direction.lengthSqr() < 1e-9) Vec3(0.0, -1.0, 0.0) else params.direction.normalize()
+		return dir.scale(((params.speedMin + params.speedMax) * 0.5).toDouble())
 	}
 
 	private fun wrap(value: Float, center: Float, size: Float): Float {

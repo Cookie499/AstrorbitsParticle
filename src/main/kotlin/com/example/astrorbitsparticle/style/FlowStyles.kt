@@ -284,6 +284,11 @@ object Comet : ParticleStyle {
 		tailFade = binder.number("tailFade"),
 	)
 
+	override fun stretchVector(effect: BoundEffect, age: Float): Vec3 {
+		val params = effect.styleParams as Params
+		return params.velocity.add(effect.physics.gravity.scale(age.toDouble()))
+	}
+
 	override fun sample(effect: BoundEffect, origin: Vec3, seed: Long, age: Float, out: ParticleBuffer) {
 		val params = effect.styleParams as Params
 		val pos = FloatArray(3)

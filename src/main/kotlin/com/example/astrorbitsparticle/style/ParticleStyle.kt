@@ -34,6 +34,9 @@ interface ParticleStyle {
 	fun bind(binder: Binder): BoundStyle
 
 	fun sample(effect: BoundEffect, origin: Vec3, seed: Long, age: Float, out: ParticleBuffer)
+
+	/** 该样式在 [age] 时刻的近似速度，供 appearance.stretch 拉长面片；无法确定返回 null。 */
+	fun stretchVector(effect: BoundEffect, age: Float): Vec3? = null
 }
 
 object ParticleStyles {
