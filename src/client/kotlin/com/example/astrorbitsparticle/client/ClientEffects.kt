@@ -39,7 +39,12 @@ class ClientEffect(
 	fun sample(): ParticleBuffer {
 		update()
 		buffer.reset(bound.count)
-		bound.style.sample(bound, origin, seed, age, buffer)
+		val sampleAge = if (bound.definition.reverse) {
+			(bound.duration - age).coerceAtLeast(0f)
+		} else {
+			age
+		}
+		bound.style.sample(bound, origin, seed, sampleAge, buffer)
 		return buffer
 	}
 }

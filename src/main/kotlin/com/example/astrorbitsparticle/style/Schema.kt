@@ -81,6 +81,7 @@ val COMMON_SCHEMA: StyleSchema = StyleSchema(
 	params = listOf(
 		numSpec("duration", 4f, "特效总时长（秒），循环播放时为一个周期", "0.05..3600", 0.05f, 3600f),
 		boolSpec("loop", false, "是否循环播放"),
+		boolSpec("reverse", false, "反向播放：按 duration - age 采样"),
 		textSpec("emission.mode", "burst", "发射方式：burst 同时出生、stream 在窗口内均匀出生、random 随机出生"),
 		intSpec("emission.count", 200, "粒子总数", "1..8192", 1f, 8192f),
 		numbersSpec("emission.window", floatArrayOf(0f, 0f), "发射窗口 [开始, 结束]（秒）"),
