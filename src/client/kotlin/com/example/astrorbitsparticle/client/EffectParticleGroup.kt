@@ -17,7 +17,7 @@ import net.minecraft.resources.Identifier
 
 val EFFECT_RENDER_TYPE = ParticleRenderType("astrorbitsparticle:effect", "AOP")
 
-private val PARTICLE_ATLAS = Identifier.withDefaultNamespace("particles")
+private val PARTICLE_ATLAS = Identifier.withDefaultNamespace("textures/atlas/particles.png")
 
 /**
  * 所有特效共用一个粒子组：组负责推进年龄、做视锥剔除，
@@ -95,6 +95,9 @@ class EffectParticleGroup(engine: ParticleEngine) : ParticleGroup<Particle>(engi
 	private fun spriteInfo(id: Identifier): SpriteInfo = sprites.getOrPut(id) {
 		runCatching {
 			val sprite = Minecraft.getInstance().atlasManager.get(SpriteId(PARTICLE_ATLAS, id))
+			com.example.astrorbitsparticle.AstrorbitsParticle.logger.debug(
+				"[effect] sprite {} uv=({}, {})-({}, {})", id, sprite.u0, sprite.v0, sprite.u1, sprite.v1,
+			)
 			SpriteInfo(
 				layer = SingleQuadParticle.Layer.bySprite(sprite),
 				u0 = sprite.u0,
@@ -103,7 +106,10 @@ class EffectParticleGroup(engine: ParticleEngine) : ParticleGroup<Particle>(engi
 				v1 = sprite.v1,
 			)
 		}.getOrElse {
-			SpriteInfo(SingleQuadParticle.Layer.TRANSLUCENT, 0f, 1f, 0f, 1f)
+			com.example.astrorbitsparticle.AstrorbitsParticle.logger.warn(
+				"[effect] sprite lookup failed for {}: {}", id, it.message,
+			)
+			SpriteInfo(SingleQuadParticle.Layer.TRANSLUCENT, 0f, 0f, 0f, 0f)
 		}
 	}
 
