@@ -1,0 +1,51 @@
+{
+	"schemaVersion": 1,
+	"id": "astrorbitsparticle",
+	"version": "${version}",
+	"name": "AstrorbitsParticle",
+	"description": "This is an example description! Tell everyone what your mod is about!",
+	"authors": [
+		"Me!"
+	],
+	"contact": {
+		"homepage": "https://fabricmc.net/",
+		"sources": "https://github.com/FabricMC/fabric-example-mod"
+	},
+	"license": "GPL-3.0",
+	"icon": "assets/astrorbitsparticle/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			{
+				"value": "com.example.astrorbitsparticle.AstrorbitsParticle",
+				"adapter": "kotlin"
+			}
+		],
+		"client": [
+			{
+				"value": "com.example.astrorbitsparticle.client.AstrorbitsParticleClient",
+				"adapter": "kotlin"
+			}
+		],
+		"fabric-datagen": [
+			{
+				"value": "com.example.astrorbitsparticle.client.AstrorbitsParticleDataGenerator",
+				"adapter": "kotlin"
+			}
+		]
+	},
+	"mixins": [
+		"astrorbitsparticle.mixins.json",
+		{
+			"config": "astrorbitsparticle.client.mixins.json",
+			"environment": "client"
+		}
+	],
+	"depends": {
+		"fabricloader": ">=0.20.1",
+		"minecraft": "~26.2",
+		"java": ">=25",
+		"fabric-api": "*",
+		"fabric-language-kotlin": "*"
+	}
+}
