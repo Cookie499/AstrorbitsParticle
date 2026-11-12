@@ -1,6 +1,8 @@
 package com.example.astrorbitsparticle.server
 
 import com.example.astrorbitsparticle.AstrorbitsParticle
+import com.example.astrorbitsparticle.style.ParticleStyles
+import com.example.astrorbitsparticle.style.StyleDocs
 import com.mojang.brigadier.CommandDispatcher
 import com.mojang.brigadier.arguments.LongArgumentType
 import com.mojang.brigadier.arguments.StringArgumentType
@@ -101,6 +103,47 @@ object EffectsCommand {
 								ctx.source.sendSuccess({ Component.literal(text) }, false)
 								1
 							},
+						),
+				)
+				.then(
+					Commands.literal("schema")
+						.then(
+							Commands.literal("all").executes { ctx ->
+								val names = ParticleStyles.all().joinToString("、") { it.id }
+								ctx.source.sendSuccess(
+									{ Component.literal("可用样式：$names（另有 common）") },
+									false,
+								)
+								1
+							},
+						)
+						.then(
+							Commands.argument("style", StringArgumentType.word())
+								.suggests { _, builder ->
+									builder.suggest("common")
+									ParticleStyles.all().forEach { builder.suggest(it.id.substringAfter(':')) }
+									builder.buildFuture()
+								}
+								.executes { ctx ->
+									val key = StringArgumentType.getString(ctx, "style")
+									val lines = if (key == "common") {
+										StyleDocs.renderCommonLines()
+									} else {
+										val style = ParticleStyles.all().firstOrNull {
+											it.id == key || it.id == "${AstrorbitsParticle.MOD_ID}:$key" ||
+												it.id.substringAfter(':') == key
+										}
+										if (style == null) {
+											ctx.source.sendFailure(Component.literal("未知样式：$key"))
+											return@executes 0
+										}
+										StyleDocs.renderStyleLines(style)
+									}
+									lines.forEach { line ->
+										ctx.source.sendSuccess({ Component.literal(line) }, false)
+									}
+									1
+								},
 						),
 				)
 				.then(

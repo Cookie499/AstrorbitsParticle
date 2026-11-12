@@ -47,6 +47,15 @@ dependencies {
 	include "net.objecthunter:exp4j:0.4.8"
 }
 
+tasks.register('generateStyleDocs', JavaExec) {
+	group = 'documentation'
+	description = 'Generate docs/样式参数.md from the style declarations'
+	classpath = sourceSets.main.runtimeClasspath
+	mainClass = 'com.example.astrorbitsparticle.style.StyleDocGenerator'
+	args layout.projectDirectory.file('docs/样式参数.md').asFile.absolutePath
+	dependsOn tasks.named('classes')
+}
+
 processResources {
 	def version = project.version
 	inputs.property "version", version

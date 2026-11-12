@@ -15,6 +15,17 @@ private const val DEG = (PI / 180.0).toFloat()
 object Fountain : ParticleStyle {
 	override val id = "astrorbitsparticle:fountain"
 
+	override val schema = StyleSchema(
+		id, "喷泉",
+		params = listOf(
+			vecSpec("axis", 0f, 1f, 0f, "喷射主方向"),
+			numSpec("spread", 18f, "圆锥半角（度）", "0..90", 0f, 90f),
+			numSpec("speed", 8f, "初速度（块/秒），可写含 t 的表达式，按出生时刻求值", "0..64", 0f, 64f),
+			numSpec("speedJitter", 0.12f, "粒子之间的速度差异比例", "0..1", 0f, 1f),
+			numSpec("nozzleRadius", 0.1f, "喷口半径（块），粒子在喷口球内取起点", "0..4", 0f, 4f),
+		),
+	)
+
 	class Params(
 		val axis: Vec3,
 		val spread: Float,
@@ -24,11 +35,11 @@ object Fountain : ParticleStyle {
 	) : BoundStyle
 
 	override fun bind(binder: Binder): BoundStyle = Params(
-		axis = binder.vec3("axis", Vec3(0.0, 1.0, 0.0)),
-		spread = binder.number("spread", 18f),
-		speed = binder.num("speed", 8f),
-		speedJitter = binder.number("speedJitter", 0.12f),
-		nozzleRadius = binder.number("nozzleRadius", 0.1f),
+		axis = binder.vec3("axis"),
+		spread = binder.number("spread"),
+		speed = binder.num("speed"),
+		speedJitter = binder.number("speedJitter"),
+		nozzleRadius = binder.number("nozzleRadius"),
 	)
 
 	override fun sample(effect: BoundEffect, origin: Vec3, seed: Long, age: Float, out: ParticleBuffer) {
@@ -63,6 +74,22 @@ object Fountain : ParticleStyle {
 object Spiral : ParticleStyle {
 	override val id = "astrorbitsparticle:spiral"
 
+	override val schema = StyleSchema(
+		id, "螺旋",
+		params = listOf(
+			vecSpec("axis", 0f, 1f, 0f, "螺旋轴"),
+			numSpec("radius", 1.6f, "旋转半径（块），可写含 t 的表达式", "0..32", 0f, 32f),
+			numSpec("radiusJitter", 0.04f, "半径随机抖动比例", "0..1", 0f, 1f),
+			numSpec("angularSpeed", 180f, "角速度（度/秒），可写表达式，负值反向旋转"),
+			numSpec("axialSpeed", 0.9f, "轴向速度（块/秒），可写表达式"),
+			numSpec("phase", 0f, "全局初相位（度）"),
+			numSpec("phaseJitter", 6f, "每粒子相位抖动（度）", "0..90", 0f, 90f),
+			intSpec("strands", 1, "螺旋股数，2 即双螺旋", "1..16", 1f, 16f),
+			numSpec("scatter", 0f, "径向随机扩散速度（块/秒）", "0..16", 0f, 16f),
+			numSpec("scatterGrowth", 1f, "扩散随年龄的指数", "0..4", 0f, 4f),
+		),
+	)
+
 	class Params(
 		val axis: Vec3,
 		val radius: BoundNumber,
@@ -77,16 +104,16 @@ object Spiral : ParticleStyle {
 	) : BoundStyle
 
 	override fun bind(binder: Binder): BoundStyle = Params(
-		axis = binder.vec3("axis", Vec3(0.0, 1.0, 0.0)),
-		radius = binder.num("radius", 1.6f),
-		radiusJitter = binder.number("radiusJitter", 0.04f),
-		angular = binder.integral("angularSpeed", 180f),
-		axial = binder.integral("axialSpeed", 0.9f),
-		phase = binder.number("phase", 0f),
-		phaseJitter = binder.number("phaseJitter", 6f),
-		strands = binder.int("strands", 1).coerceIn(1, 16),
-		scatter = binder.number("scatter", 0f),
-		scatterGrowth = binder.number("scatterGrowth", 1f),
+		axis = binder.vec3("axis"),
+		radius = binder.num("radius"),
+		radiusJitter = binder.number("radiusJitter"),
+		angular = binder.integral("angularSpeed"),
+		axial = binder.integral("axialSpeed"),
+		phase = binder.number("phase"),
+		phaseJitter = binder.number("phaseJitter"),
+		strands = binder.int("strands"),
+		scatter = binder.number("scatter"),
+		scatterGrowth = binder.number("scatterGrowth"),
 	)
 
 	override fun sample(effect: BoundEffect, origin: Vec3, seed: Long, age: Float, out: ParticleBuffer) {
@@ -137,6 +164,22 @@ object Spiral : ParticleStyle {
 object Wave : ParticleStyle {
 	override val id = "astrorbitsparticle:wave"
 
+	override val schema = StyleSchema(
+		id, "波浪",
+		params = listOf(
+			vecSpec("travelAxis", 1f, 0f, 0f, "波的传播方向"),
+			numSpec("amplitude", 0.9f, "振幅（块），可写含 t 的表达式", "0..32", 0f, 32f),
+			numSpec("wavelength", 5f, "波长（块）", "0.1..64", 0.1f, 64f),
+			numSpec("flowSpeed", 3f, "粒子沿曲线流动的速度（块/秒）"),
+			numSpec("driftSpeed", 0f, "整条曲线沿传播方向的平移速度（块/秒）"),
+			numSpec("phase", 0f, "初相位（度）"),
+			numSpec("width", 16f, "波带长度（块）", "0.1..256", 0.1f, 256f),
+			numSpec("depth", 1f, "波带宽度（块），rows 大于 1 时生效", "0..64", 0f, 64f),
+			intSpec("rows", 1, "横向排数，大于 1 得到波面", "1..64", 1f, 64f),
+			numSpec("jitter", 0.05f, "位置随机抖动（块）", "0..4", 0f, 4f),
+		),
+	)
+
 	class Params(
 		val travelAxis: Vec3,
 		val amplitude: BoundNumber,
@@ -151,16 +194,16 @@ object Wave : ParticleStyle {
 	) : BoundStyle
 
 	override fun bind(binder: Binder): BoundStyle = Params(
-		travelAxis = binder.vec3("travelAxis", Vec3(1.0, 0.0, 0.0)),
-		amplitude = binder.num("amplitude", 0.9f),
-		wavelength = binder.number("wavelength", 5f).coerceAtLeast(0.1f),
-		flowSpeed = binder.number("flowSpeed", 3f),
-		driftSpeed = binder.number("driftSpeed", 0f),
-		phase = binder.number("phase", 0f),
-		width = binder.number("width", 16f).coerceAtLeast(0.1f),
-		depth = binder.number("depth", 1f),
-		rows = binder.int("rows", 1).coerceIn(1, 64),
-		jitter = binder.number("jitter", 0.05f),
+		travelAxis = binder.vec3("travelAxis"),
+		amplitude = binder.num("amplitude"),
+		wavelength = binder.number("wavelength"),
+		flowSpeed = binder.number("flowSpeed"),
+		driftSpeed = binder.number("driftSpeed"),
+		phase = binder.number("phase"),
+		width = binder.number("width"),
+		depth = binder.number("depth"),
+		rows = binder.int("rows"),
+		jitter = binder.number("jitter"),
 	)
 
 	override fun sample(effect: BoundEffect, origin: Vec3, seed: Long, age: Float, out: ParticleBuffer) {
@@ -202,6 +245,21 @@ object Wave : ParticleStyle {
 object Comet : ParticleStyle {
 	override val id = "astrorbitsparticle:comet"
 
+	override val schema = StyleSchema(
+		id, "彗星",
+		params = listOf(
+			vecSpec("velocity", 0f, 5f, 0f, "主体初速度（块/秒）"),
+			numSpec("headScale", 3f, "主体尺寸相对 appearance.size 的倍数", "0.1..16", 0.1f, 16f),
+			colorSpec("headColor", "主体颜色，缺省用 appearance.color"),
+			intSpec("tailCount", 90, "尾迹粒子数，总粒子数为 1 加该值", "0..1024", 0f, 1024f),
+			numSpec("tailLag", 0.9f, "尾迹最长滞后时间（秒）", "0.01..16", 0.01f, 16f),
+			numSpec("tailSpread", 0.4f, "最大扩散半径（块）", "0..16", 0f, 16f),
+			numSpec("tailSpreadGrowth", 1.6f, "扩散随滞后的指数", "0..4", 0f, 4f),
+			numSpec("tailWobble", 0.06f, "尾迹低频抖动幅度（块）", "0..4", 0f, 4f),
+			numSpec("tailFade", 1.4f, "尾部亮度衰减指数", "0..8", 0f, 8f),
+		),
+	)
+
 	class Params(
 		val velocity: Vec3,
 		val headScale: Float,
@@ -215,15 +273,15 @@ object Comet : ParticleStyle {
 	) : BoundStyle
 
 	override fun bind(binder: Binder): BoundStyle = Params(
-		velocity = binder.vec3("velocity", Vec3(0.0, 5.0, 0.0)),
-		headScale = binder.number("headScale", 3f),
-		headColor = binder.params.get("headColor")?.let { parseColor(it, 0) } ?: 0,
-		tailCount = binder.int("tailCount", 90).coerceIn(0, 1024),
-		tailLag = binder.number("tailLag", 0.9f).coerceAtLeast(0.01f),
-		tailSpread = binder.number("tailSpread", 0.4f),
-		tailSpreadGrowth = binder.number("tailSpreadGrowth", 1.6f),
-		tailWobble = binder.number("tailWobble", 0.06f),
-		tailFade = binder.number("tailFade", 1.4f),
+		velocity = binder.vec3("velocity"),
+		headScale = binder.number("headScale"),
+		headColor = binder.colorOrNull("headColor") ?: 0,
+		tailCount = binder.int("tailCount"),
+		tailLag = binder.number("tailLag"),
+		tailSpread = binder.number("tailSpread"),
+		tailSpreadGrowth = binder.number("tailSpreadGrowth"),
+		tailWobble = binder.number("tailWobble"),
+		tailFade = binder.number("tailFade"),
 	)
 
 	override fun sample(effect: BoundEffect, origin: Vec3, seed: Long, age: Float, out: ParticleBuffer) {

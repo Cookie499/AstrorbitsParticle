@@ -14,6 +14,18 @@ private const val DEG_TO_RAD = (PI / 180.0).toFloat()
 object RadialBurst : ParticleStyle {
 	override val id = "astrorbitsparticle:radial_burst"
 
+	override val schema = StyleSchema(
+		id, "放射状爆发",
+		params = listOf(
+			numSpec("speed", 6f, "基准速度（块/秒），可写含 t 的表达式", "0..64", 0f, 64f),
+			numSpec("speedJitter", 0.12f, "粒子之间的速度差异比例", "0..1", 0f, 1f),
+			numSpec("originJitter", 0f, "原点抖动半径（块）", "0..8", 0f, 8f),
+			vecSpec("axis", 0f, 1f, 0f, "锥形喷射主方向，只在 cone 小于 180 时生效"),
+			numSpec("cone", 180f, "喷射半角（度），180 为全向", "0..180", 0f, 180f),
+			numSpec("shellBias", 0f, "速度分布向快端偏移的比例", "0..1", 0f, 1f),
+		),
+	)
+
 	class Params(
 		val speed: BoundNumber,
 		val speedJitter: Float,
@@ -24,12 +36,12 @@ object RadialBurst : ParticleStyle {
 	) : BoundStyle
 
 	override fun bind(binder: Binder): BoundStyle = Params(
-		speed = binder.num("speed", 6f),
-		speedJitter = binder.number("speedJitter", 0.12f),
-		originJitter = binder.number("originJitter", 0f),
-		axis = binder.vec3("axis", Vec3(0.0, 1.0, 0.0)),
-		cone = binder.number("cone", 180f),
-		shellBias = binder.number("shellBias", 0f),
+		speed = binder.num("speed"),
+		speedJitter = binder.number("speedJitter"),
+		originJitter = binder.number("originJitter"),
+		axis = binder.vec3("axis"),
+		cone = binder.number("cone"),
+		shellBias = binder.number("shellBias"),
 	)
 
 	override fun sample(effect: BoundEffect, origin: Vec3, seed: Long, age: Float, out: ParticleBuffer) {
@@ -68,6 +80,17 @@ object RadialBurst : ParticleStyle {
 object SphericalBurst : ParticleStyle {
 	override val id = "astrorbitsparticle:spherical_burst"
 
+	override val schema = StyleSchema(
+		id, "球状爆发",
+		params = listOf(
+			numSpec("speed", 5f, "球面最大速度（块/秒）", "0..64", 0f, 64f),
+			numSpec("fill", 0f, "0 空心壳，1 实心球，中间值介于两者", "0..1", 0f, 1f),
+			numSpec("shellJitter", 0.03f, "壳层厚度抖动比例，fill 为 0 时生效", "0..1", 0f, 1f),
+			numSpec("flatten", 1f, "Y 轴压扁系数，小于 1 得到扁球", "0.1..4", 0.1f, 4f),
+			numSpec("originJitter", 0f, "原点抖动半径（块）", "0..8", 0f, 8f),
+		),
+	)
+
 	class Params(
 		val speed: BoundNumber,
 		val fill: Float,
@@ -77,11 +100,11 @@ object SphericalBurst : ParticleStyle {
 	) : BoundStyle
 
 	override fun bind(binder: Binder): BoundStyle = Params(
-		speed = binder.num("speed", 5f),
-		fill = binder.number("fill", 0f).coerceIn(0f, 1f),
-		shellJitter = binder.number("shellJitter", 0.03f),
-		flatten = binder.number("flatten", 1f),
-		originJitter = binder.number("originJitter", 0f),
+		speed = binder.num("speed"),
+		fill = binder.number("fill"),
+		shellJitter = binder.number("shellJitter"),
+		flatten = binder.number("flatten"),
+		originJitter = binder.number("originJitter"),
 	)
 
 	override fun sample(effect: BoundEffect, origin: Vec3, seed: Long, age: Float, out: ParticleBuffer) {
@@ -119,6 +142,20 @@ object SphericalBurst : ParticleStyle {
 object RingBurst : ParticleStyle {
 	override val id = "astrorbitsparticle:ring_burst"
 
+	override val schema = StyleSchema(
+		id, "环形爆发",
+		params = listOf(
+			vecSpec("planeNormal", 0f, 1f, 0f, "环所在平面的法线"),
+			numSpec("speed", 6f, "径向速度（块/秒）", "0..64", 0f, 64f),
+			numSpec("speedJitter", 0.08f, "粒子之间的速度差异比例", "0..1", 0f, 1f),
+			numSpec("thickness", 0f, "沿法线的环厚度（块）", "0..8", 0f, 8f),
+			numSpec("radius0", 0f, "初始半径，大于 0 时从既有圆环向外扩张", "0..64", 0f, 64f),
+			boolSpec("even", true, "是否等角度分布；false 为随机角度"),
+			numSpec("angleJitter", 0f, "等角度分布上叠加的角度抖动（度）", "0..90", 0f, 90f),
+			numSpec("arc", 360f, "圆弧张角（度），小于 360 得到扇环", "1..360", 1f, 360f),
+		),
+	)
+
 	class Params(
 		val planeNormal: Vec3,
 		val speed: BoundNumber,
@@ -131,14 +168,14 @@ object RingBurst : ParticleStyle {
 	) : BoundStyle
 
 	override fun bind(binder: Binder): BoundStyle = Params(
-		planeNormal = binder.vec3("planeNormal", Vec3(0.0, 1.0, 0.0)),
-		speed = binder.num("speed", 6f),
-		speedJitter = binder.number("speedJitter", 0.08f),
-		thickness = binder.number("thickness", 0f),
-		radius0 = binder.number("radius0", 0f),
-		even = binder.bool("even", true),
-		angleJitter = binder.number("angleJitter", 0f),
-		arc = binder.number("arc", 360f),
+		planeNormal = binder.vec3("planeNormal"),
+		speed = binder.num("speed"),
+		speedJitter = binder.number("speedJitter"),
+		thickness = binder.number("thickness"),
+		radius0 = binder.number("radius0"),
+		even = binder.bool("even"),
+		angleJitter = binder.number("angleJitter"),
+		arc = binder.number("arc"),
 	)
 
 	override fun sample(effect: BoundEffect, origin: Vec3, seed: Long, age: Float, out: ParticleBuffer) {

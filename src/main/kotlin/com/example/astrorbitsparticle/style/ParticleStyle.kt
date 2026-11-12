@@ -29,6 +29,8 @@ interface BoundStyle
 interface ParticleStyle {
 	val id: String
 
+	val schema: StyleSchema
+
 	fun bind(binder: Binder): BoundStyle
 
 	fun sample(effect: BoundEffect, origin: Vec3, seed: Long, age: Float, out: ParticleBuffer)
@@ -57,12 +59,75 @@ class Binder(
 	val params: JsonObject,
 	val duration: Float,
 	val count: Int,
+	val schema: StyleSchema? = null,
 ) {
 	val problems = ArrayList<String>()
 
+	init {
+		val schema = schema
+		if (schema != null) {
+			for (key in params.keySet()) {
+				if (schema.spec(key) == null) problems += "unknown parameter: $key"
+			}
+		}
+	}
+
+	private fun spec(name: String): ParamSpec? = schema?.spec(name)
+
+	private fun defaultNumber(name: String): Float =
+		(spec(name)?.default as? ParamDefault.Num)?.value ?: 0f
+
+	private fun clamp(name: String, value: Float): Float {
+		val spec = spec(name) ?: return value
+		val min = spec.min
+		val max = spec.max
+		return value.coerceIn(min ?: Float.NEGATIVE_INFINITY, max ?: Float.POSITIVE_INFINITY)
+	}
+
+	fun num(name: String): BoundNumber = bindNumber(params.get(name), defaultNumber(name), name)
+
 	fun num(name: String, default: Float): BoundNumber = bindNumber(params.get(name), default, name)
 
-	fun number(name: String, default: Float): Float = num(name, default).at(0f)
+	fun number(name: String): Float = clamp(name, num(name).at(0f))
+
+	fun number(name: String, default: Float): Float = clamp(name, num(name, default).at(0f))
+
+	fun vec3(name: String): Vec3 {
+		val default = spec(name)?.default as? ParamDefault.Vec
+		val fallback = if (default == null) Vec3.ZERO
+		else Vec3(default.x.toDouble(), default.y.toDouble(), default.z.toDouble())
+		return params.vec3(name, fallback)
+	}
+
+	fun bool(name: String): Boolean {
+		val default = (spec(name)?.default as? ParamDefault.Flag)?.value ?: false
+		return params.get(name)?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isBoolean }?.asBoolean
+			?: default
+	}
+
+	fun int(name: String): Int {
+		val default = (spec(name)?.default as? ParamDefault.Whole)?.value ?: 0
+		val value = params.get(name)?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isNumber }?.asInt
+			?: default
+		val spec = spec(name) ?: return value
+		return value.coerceIn(spec.min?.toInt() ?: Int.MIN_VALUE, spec.max?.toInt() ?: Int.MAX_VALUE)
+	}
+
+	fun colorOrNull(name: String): Int? = params.get(name)?.let { parseColor(it, 0) }
+
+	fun strings(name: String): List<String> {
+		val array = params.get(name) as? JsonArray
+		if (array != null) return array.mapNotNull { if (it.isJsonPrimitive) it.asString else null }
+		return (spec(name)?.default as? ParamDefault.Texts)?.values ?: emptyList()
+	}
+
+	fun floats(name: String): FloatArray? {
+		val array = params.get(name) as? JsonArray
+		if (array != null) return FloatArray(array.size()) { array[it].asFloat }
+		return (spec(name)?.default as? ParamDefault.Numbers)?.values
+	}
+
+	fun integral(name: String): BoundNumber = integral(name, defaultNumber(name))
 
 	fun integral(name: String, default: Float): BoundNumber {
 		val element = params.get(name) ?: return BoundNumber.Lut(floatArrayOf(0f, default * duration), duration)
@@ -79,23 +144,11 @@ class Binder(
 
 	fun vec3(name: String, default: Vec3): Vec3 = params.vec3(name, default)
 
-	fun enumName(name: String, default: String): String = params.string(name, default)
-
 	fun bool(name: String, default: Boolean): Boolean =
 		params.get(name)?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isBoolean }?.asBoolean ?: default
 
 	fun int(name: String, default: Int): Int =
 		params.get(name)?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isNumber }?.asInt ?: default
-
-	fun strings(name: String): List<String> {
-		val array = params.get(name) as? JsonArray ?: return emptyList()
-		return array.mapNotNull { if (it.isJsonPrimitive) it.asString else null }
-	}
-
-	fun floats(name: String): FloatArray? {
-		val array = params.get(name) as? JsonArray ?: return null
-		return FloatArray(array.size()) { array[it].asFloat }
-	}
 
 	fun curve(name: String, default: FloatArray): FloatCurve =
 		params.get(name)?.let { parseCurve(it) } ?: FloatCurve(default)
@@ -114,7 +167,7 @@ class Binder(
 			return BoundNumber.Const(default)
 		}
 		val primitive = element.asJsonPrimitive
-		if (primitive.isNumber) return BoundNumber.Const(primitive.asFloat)
+		if (primitive.isNumber) return BoundNumber.Const(clamp(path, primitive.asFloat))
 		if (!primitive.isString) return BoundNumber.Const(default)
 		val compiled = Exprs.compile(primitive.asString)
 		if (compiled.isFailure) {
@@ -189,7 +242,7 @@ object EffectBinder {
 	fun bind(definition: EffectDefinition): Result<BoundEffect> = runCatching {
 		val style = ParticleStyles.get(definition.style)
 			?: error("unknown style: ${definition.style}")
-		val binder = Binder(definition.params, definition.duration, definition.emission.count)
+		val binder = Binder(definition.params, definition.duration, definition.emission.count, style.schema)
 		val styleParams = style.bind(binder)
 		val appearance = bindAppearance(definition.appearance, binder)
 		if (binder.problems.isNotEmpty()) {
