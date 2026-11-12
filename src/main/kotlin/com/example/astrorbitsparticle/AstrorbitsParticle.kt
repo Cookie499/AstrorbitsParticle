@@ -1,5 +1,6 @@
 package com.example.astrorbitsparticle
 
+import com.example.astrorbitsparticle.net.ModPayloads
 import com.example.astrorbitsparticle.style.BuiltinStyles
 import com.example.astrorbitsparticle.style.ParticleStyles
 import net.fabricmc.api.ModInitializer
@@ -13,6 +14,7 @@ object AstrorbitsParticle : ModInitializer {
 
 	override fun onInitialize() {
 		BuiltinStyles.registerAll()
+		ModPayloads.register()
 		logger.info("[effect] registered {} particle styles", ParticleStyles.all().size)
 	}
 
