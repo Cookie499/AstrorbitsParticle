@@ -104,6 +104,64 @@ object EffectsCommand {
 						),
 				)
 				.then(
+					Commands.literal("test")
+						.then(
+							Commands.literal("list").executes { ctx ->
+								ctx.source.sendSuccess(
+									{ Component.literal("可用预设：" + TestPresets.names().joinToString("、")) },
+									false,
+								)
+								1
+							},
+						)
+						.then(
+							Commands.literal("all").executes { ctx ->
+								val source = ctx.source
+								val names = TestPresets.names().toList()
+								var spawned = 0
+								names.forEachIndexed { index, name ->
+									val angle = index * Math.PI * 2.0 / names.size
+									val origin = source.position.add(
+										kotlin.math.cos(angle) * 6.0,
+										0.0,
+										kotlin.math.sin(angle) * 6.0,
+									)
+									if (TestPresets.play(name, source.level, origin) != null) spawned++
+								}
+								source.sendSuccess(
+									{ Component.literal("已播放 $spawned/${names.size} 个测试特效") },
+									false,
+								)
+								spawned
+							},
+						)
+						.then(
+							Commands.argument("preset", StringArgumentType.word())
+								.suggests { _, builder ->
+									TestPresets.names().forEach(builder::suggest)
+									builder.buildFuture()
+								}
+								.executes { ctx ->
+									val source = ctx.source
+									val name = StringArgumentType.getString(ctx, "preset")
+									if (name !in TestPresets.names()) {
+										source.sendFailure(Component.literal("未知预设：$name"))
+										return@executes 0
+									}
+									val effect = TestPresets.play(name, source.level, source.position)
+									if (effect == null) {
+										source.sendFailure(Component.literal("测试特效创建失败，详见日志"))
+										return@executes 0
+									}
+									source.sendSuccess(
+										{ Component.literal("已播放测试特效 $name，id=${effect.id}") },
+										false,
+									)
+									1
+								},
+						),
+				)
+				.then(
 					Commands.literal("reload").executes { ctx ->
 						ServerEffects.reload()
 						ctx.source.sendSuccess(
