@@ -118,3 +118,23 @@ publishing {
 		}
 	}
 }
+
+tasks.register('updateGolden', JavaExec) {
+	group = 'verification'
+	description = 'Rewrite golden samples under golden/'
+	classpath = sourceSets.main.runtimeClasspath
+	mainClass = 'com.example.astrorbitsparticle.style.GoldenSampler'
+	args layout.projectDirectory.dir('golden').asFile.absolutePath, '--write'
+	dependsOn tasks.named('classes')
+}
+
+tasks.register('verifyGolden', JavaExec) {
+	group = 'verification'
+	description = 'Compare style output against golden/'
+	classpath = sourceSets.main.runtimeClasspath
+	mainClass = 'com.example.astrorbitsparticle.style.GoldenSampler'
+	args layout.projectDirectory.dir('golden').asFile.absolutePath
+	dependsOn tasks.named('classes')
+}
+
+tasks.named('check') { dependsOn tasks.named('verifyGolden') }
