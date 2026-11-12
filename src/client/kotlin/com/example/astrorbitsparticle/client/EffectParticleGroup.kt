@@ -39,7 +39,16 @@ private const val STRETCH_SEGMENTS = 3
  */
 class EffectParticleGroup(engine: ParticleEngine) : ParticleGroup<Particle>(engine) {
 	private val sprites = HashMap<Identifier, SpriteInfo>()
-	private val additiveLayer: SingleQuadParticle.Layer by lazy {
+	private val shadersActive = net.fabricmc.loader.api.FabricLoader.getInstance()
+		.isModLoaded("iris") || net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("oculus")
+	private val additiveLayer: SingleQuadParticle.Layer? by lazy {
+		// 自定义管线在 Iris/Oculus 重载光影时可能失效，光影下退回普通半透明混合
+		if (shadersActive) {
+			com.example.astrorbitsparticle.AstrorbitsParticle.logger.info(
+				"[effect] shader mod detected, additive blend falls back to translucent",
+			)
+			return@lazy null
+		}
 		val pipeline = RenderPipeline.builder(net.minecraft.client.renderer.RenderPipelines.PARTICLE_SNIPPET)
 			.withLocation(Identifier.fromNamespaceAndPath("astrorbitsparticle", "pipeline/additive_particle"))
 			.withColorTargetState(ColorTargetState(BlendFunction.ADDITIVE))
@@ -91,7 +100,11 @@ class EffectParticleGroup(engine: ParticleEngine) : ParticleGroup<Particle>(engi
 			val buffer = effect.sample()
 			if (buffer.count == 0) continue
 			val sprite = spriteInfo(effect.bound.appearance.sprite)
-			val layer = if (effect.bound.appearance.blend == Blend.ADDITIVE) additiveLayer else sprite.layer
+			val layer = if (effect.bound.appearance.blend == Blend.ADDITIVE) {
+				additiveLayer ?: sprite.layer
+			} else {
+				sprite.layer
+			}
 			val light = lightAt(level, effect)
 			val ox = effect.origin.x.toFloat()
 			val oy = effect.origin.y.toFloat()

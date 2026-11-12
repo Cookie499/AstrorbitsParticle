@@ -98,7 +98,7 @@ val COMMON_SCHEMA: StyleSchema = StyleSchema(
 		numSpec("appearance.colorJitter", 0f, "亮度随机抖动比例", "0..1", 0f, 1f),
 		textSpec("appearance.colorByAge", "", "颜色随年龄的渐变，格式 [[u,\"#RRGGBB\"],...]"),
 		textSpec("appearance.alphaByAge", "[[0,1],[0.7,1],[1,0]]", "不透明度随年龄的曲线"),
-		textSpec("appearance.blend", "additive", "混合方式：additive 叠加，alpha 普通混合"),
+		textSpec("appearance.blend", "additive", "混合方式：additive 叠加，alpha 普通混合；检测到 Iris/Oculus 时 additive 退回半透明"),
 		boolSpec("appearance.fullbright", true, "是否忽略世界光照"),
 		numSpec("appearance.stretch", 0f, "沿速度方向拉伸的时长（秒），0 关闭；只对能给出速度的样式生效", "0..10"),
 		numSpec("appearance.spin", 0f, "面片自转（度/秒）"),
