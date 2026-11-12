@@ -52,15 +52,19 @@ class EffectParticleGroup(engine: ParticleEngine) : ParticleGroup<Particle>(engi
 			if (buffer.count == 0) continue
 			val sprite = spriteInfo(effect.bound.appearance.sprite)
 			val light = lightAt(level, effect)
+			val ox = effect.origin.x.toFloat()
+			val oy = effect.origin.y.toFloat()
+			val oz = effect.origin.z.toFloat()
+			val scale = effect.scale
 
 			for (i in 0 until buffer.count) {
 				state.add(
 					sprite.layer,
-					(buffer.x[i] - cameraPos.x).toFloat(),
-					(buffer.y[i] - cameraPos.y).toFloat(),
-					(buffer.z[i] - cameraPos.z).toFloat(),
+					(ox + (buffer.x[i] - ox) * scale - cameraPos.x).toFloat(),
+					(oy + (buffer.y[i] - oy) * scale - cameraPos.y).toFloat(),
+					(oz + (buffer.z[i] - oz) * scale - cameraPos.z).toFloat(),
 					rotation.x, rotation.y, rotation.z, rotation.w,
-					buffer.size[i],
+					buffer.size[i] * scale,
 					sprite.u0, sprite.u1, sprite.v0, sprite.v1,
 					buffer.argb[i],
 					light,

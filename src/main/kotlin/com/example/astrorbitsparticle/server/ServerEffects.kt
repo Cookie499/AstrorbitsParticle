@@ -166,8 +166,8 @@ object ServerEffects {
 			val level = server.getLevel(effect.dimension) ?: continue
 			val elapsed = (now - effect.startTick).coerceAtLeast(0L)
 			for (player in server.playerList.players) {
-				val eligible = isEligible(player, effect)
 				val subscribed = player.uuid in effect.subscribers
+				val eligible = isEligible(player, effect, subscribed)
 				if (eligible && !subscribed) {
 					sendStart(player, effect, elapsed)
 					effect.subscribers += player.uuid
@@ -179,7 +179,7 @@ object ServerEffects {
 		}
 	}
 
-	private fun isEligible(player: ServerPlayer, effect: ServerEffect): Boolean {
+	private fun isEligible(player: ServerPlayer, effect: ServerEffect, subscribed: Boolean): Boolean {
 		if (player.level().dimension() != effect.dimension) return false
 		if (!ServerPlayNetworking.canSend(player, EffectStartPayload.TYPE)) return false
 		val visibility = effect.definition.visibility
@@ -187,7 +187,9 @@ object ServerEffects {
 		if (visibility.requireScene && (scene == null || !scene.contains(player.position()))) return false
 		val limit = (scene?.viewDistance ?: visibility.viewDistance)
 			.coerceAtMost(visibility.viewDistance) + 16f
-		return player.position().distanceToSqr(effect.origin) <= (limit * limit).toDouble()
+		// 已在订阅中的玩家用更大的退出半径，避免在边界反复收发。
+		val radius = if (subscribed) limit * 1.15f else limit
+		return player.position().distanceToSqr(effect.origin) <= (radius * radius).toDouble()
 	}
 
 	private fun sendStart(player: ServerPlayer, effect: ServerEffect, elapsed: Long) {
@@ -201,7 +203,6 @@ object ServerEffects {
 		val payload = EffectStartPayload(
 			effectId = effect.id,
 			seed = effect.seed,
-			startGameTime = effect.startTick,
 			elapsedTicks = elapsedTicks,
 			x = effect.origin.x.toFloat(),
 			y = effect.origin.y.toFloat(),

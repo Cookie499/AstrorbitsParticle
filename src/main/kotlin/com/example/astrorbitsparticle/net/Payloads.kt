@@ -17,7 +17,6 @@ const val RNG_VERSION = 1
 class EffectStartPayload(
 	val effectId: Long,
 	val seed: Long,
-	val startGameTime: Long,
 	val elapsedTicks: Int,
 	val x: Float,
 	val y: Float,
@@ -36,7 +35,6 @@ class EffectStartPayload(
 			StreamEncoder { buf, payload ->
 				buf.writeLong(payload.effectId)
 				buf.writeLong(payload.seed)
-				buf.writeLong(payload.startGameTime)
 				buf.writeVarInt(payload.elapsedTicks)
 				buf.writeFloat(payload.x)
 				buf.writeFloat(payload.y)
@@ -50,7 +48,6 @@ class EffectStartPayload(
 				EffectStartPayload(
 					effectId = buf.readLong(),
 					seed = buf.readLong(),
-					startGameTime = buf.readLong(),
 					elapsedTicks = buf.readVarInt(),
 					x = buf.readFloat(),
 					y = buf.readFloat(),
