@@ -14,6 +14,14 @@
 
 命令需要 gamemaster 权限。场景与定义都在 `config/astrorbitsparticle/` 下。
 
+没有布景时可以直接用内置预设验证样式：
+
+```text
+/astrorbits test list        查看可用预设
+/astrorbits test radial      在当前位置播放单个预设
+/astrorbits test all         把 9 个预设围成一圈同时播放
+```
+
 ## 文档
 
 - [粒子样式表](docs/粒子样式表.md)：9 种内置样式的参数、运动学、随机流与 JSON 示例
