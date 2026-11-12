@@ -26,7 +26,9 @@ class ClientEffect(
 		private set
 
 	val buffer = ParticleBuffer()
-	val cullBox: AABB = AABB(origin, origin).inflate((bound.radius * scale).toDouble())
+	val cullBox: AABB = AABB(origin, origin).inflate(
+		(bound.radius * scale + bound.definition.visibility.boundsPadding).toDouble(),
+	)
 
 	fun update() {
 		age = baseAge + (System.nanoTime() - receivedNanos) / 1_000_000_000.0f

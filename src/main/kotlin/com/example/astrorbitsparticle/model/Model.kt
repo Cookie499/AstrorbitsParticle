@@ -62,6 +62,7 @@ data class Appearance(
 data class Visibility(
 	val viewDistance: Float = 96f,
 	val requireScene: Boolean = true,
+	val boundsPadding: Float = 1f,
 )
 
 data class EffectDefinition(
@@ -139,6 +140,7 @@ data class EffectDefinition(
 		private fun parseVisibility(obj: JsonObject): Visibility = Visibility(
 			viewDistance = obj.float("viewDistance", 96f).coerceIn(8f, 512f),
 			requireScene = obj.bool("requireScene", true),
+			boundsPadding = obj.float("boundsPadding", 1f).coerceIn(0f, 64f),
 		)
 	}
 }

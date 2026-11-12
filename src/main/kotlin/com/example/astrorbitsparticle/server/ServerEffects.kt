@@ -192,7 +192,7 @@ object ServerEffects {
 		val scene = effect.scene
 		if (visibility.requireScene && (scene == null || !scene.contains(player.position()))) return false
 		val limit = (scene?.viewDistance ?: visibility.viewDistance)
-			.coerceAtMost(visibility.viewDistance) + 16f
+			.coerceAtMost(visibility.viewDistance) + 16f + visibility.boundsPadding
 		// 已在订阅中的玩家用更大的退出半径，避免在边界反复收发。
 		val radius = if (subscribed) limit * 1.15f else limit
 		return player.position().distanceToSqr(effect.origin) <= (radius * radius).toDouble()

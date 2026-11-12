@@ -117,8 +117,8 @@ object Rain : ParticleStyle {
 			numbersSpec("speedRange", floatArrayOf(14f, 22f), "速度区间 [最小, 最大]（块/秒），差速来源"),
 			vecSpec("area", 26f, 18f, 26f, "降雨体积（块）"),
 			numSpec("streakLength", 0.8f, "拖尾拉伸时长（秒），当前未实现", "0..10", 0f, 10f),
-			intSpec("trailCount", 0, "每条雨丝的额外尾迹粒子数，当前未实现", "0..16", 0f, 16f),
-			numSpec("trailSpread", 0.08f, "尾迹横向扩散（块），当前未实现", "0..4", 0f, 4f),
+			intSpec("trailCount", 0, "每条雨丝额外挂的尾迹粒子数", "0..16", 0f, 16f),
+			numSpec("trailSpread", 0.08f, "尾迹逐段横向扩散（块）", "0..4", 0f, 4f),
 			boolSpec("wrap", true, "是否在体积内循环"),
 		),
 	)
@@ -129,6 +129,8 @@ object Rain : ParticleStyle {
 		val speedMax: Float,
 		val area: Vec3,
 		val streakLength: Float,
+		val trailCount: Int,
+		val trailSpread: Float,
 		val wrap: Boolean,
 	) : BoundStyle
 
@@ -142,6 +144,8 @@ object Rain : ParticleStyle {
 			speedMax = maxOf(min, max),
 			area = binder.vec3("area"),
 			streakLength = binder.number("streakLength"),
+			trailCount = binder.int("trailCount"),
+			trailSpread = binder.number("trailSpread"),
 			wrap = binder.bool("wrap"),
 		)
 	}
@@ -150,17 +154,15 @@ object Rain : ParticleStyle {
 		val params = effect.styleParams as Params
 		val dir = if (params.direction.lengthSqr() < 1e-9) Vec3(0.0, -1.0, 0.0) else params.direction.normalize()
 		val extent = (abs(dir.x) * params.area.x + abs(dir.y) * params.area.y + abs(dir.z) * params.area.z).toFloat()
-		val halfX = (params.area.x * 0.5).toFloat()
-		val halfY = (params.area.y * 0.5).toFloat()
-		val halfZ = (params.area.z * 0.5).toFloat()
+		val perDrop = 1 + params.trailCount
 
-		for (i in 0 until effect.count) {
-			val life = EmissionMath.lifetime(effect.emission, seed, i)
-			val local = age - EmissionMath.birth(effect.emission, seed, i, effect.count)
+		for (drop in 0 until effect.count) {
+			val life = EmissionMath.lifetime(effect.emission, seed, drop)
+			val local = age - EmissionMath.birth(effect.emission, seed, drop, effect.count)
 			if (local <= 0f || local >= life) continue
 
-			val speed = params.speedMin + (params.speedMax - params.speedMin) * HashRandom.unit(seed, Streams.SPEED, i)
-			val along = speed * age + HashRandom.unit(seed, Streams.TIME, i) * extent
+			val speed = params.speedMin + (params.speedMax - params.speedMin) * HashRandom.unit(seed, Streams.SPEED, drop)
+			val along = speed * age + HashRandom.unit(seed, Streams.TIME, drop) * extent
 			var x = (origin.x + dir.x * along).toFloat()
 			var y = (origin.y + dir.y * along).toFloat()
 			var z = (origin.z + dir.z * along).toFloat()
@@ -169,7 +171,23 @@ object Rain : ParticleStyle {
 				y = wrap(y, origin.y.toFloat(), params.area.y.toFloat())
 				z = wrap(z, origin.z.toFloat(), params.area.z.toFloat())
 			}
-			StyleSupport.emit(effect, seed, i, age, local / life, x, y, z, out)
+
+			for (segment in 0 until perDrop) {
+				val index = drop * perDrop + segment
+				val back = segment * 0.18f
+				val spread = params.trailSpread * segment
+				val jx = if (spread > 0f) spread * HashRandom.signed(seed, Streams.JITTER, index, 0) else 0f
+				val jy = if (spread > 0f) spread * HashRandom.signed(seed, Streams.JITTER, index, 1) else 0f
+				val jz = if (spread > 0f) spread * HashRandom.signed(seed, Streams.JITTER, index, 2) else 0f
+				val alphaScale = 1f - 0.6f * segment / perDrop
+				StyleSupport.emit(
+					effect, seed, index, age, local / life,
+					(x - dir.x.toFloat() * back + jx),
+					(y - dir.y.toFloat() * back + jy),
+					(z - dir.z.toFloat() * back + jz),
+					out, 1f, alphaScale,
+				)
+			}
 		}
 	}
 

@@ -104,5 +104,6 @@ val COMMON_SCHEMA: StyleSchema = StyleSchema(
 		numSpec("appearance.spin", 0f, "面片自转（度/秒），当前未实现"),
 		numSpec("visibility.viewDistance", 96f, "客户端可见距离（块）", "8..512", 8f, 512f),
 		boolSpec("visibility.requireScene", true, "是否必须位于演唱会场景内"),
+		numSpec("visibility.boundsPadding", 1f, "包围球额外外扩（块），避免边缘被裁切", "0..64", 0f, 64f),
 	)
 )
