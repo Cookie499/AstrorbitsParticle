@@ -1,6 +1,9 @@
 package com.example.astrorbitsparticle
 
+import com.example.astrorbitsparticle.net.EffectHandshakePayload
 import com.example.astrorbitsparticle.net.ModPayloads
+import com.example.astrorbitsparticle.net.PROTOCOL_VERSION
+import com.example.astrorbitsparticle.net.RNG_VERSION
 import com.example.astrorbitsparticle.particle.EffectAnchorOptions
 import com.example.astrorbitsparticle.server.EffectsCommand
 import com.example.astrorbitsparticle.server.ServerEffects
@@ -10,6 +13,8 @@ import net.fabricmc.api.ModInitializer
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents
+import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents
+import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking
 import net.minecraft.resources.Identifier
 import org.slf4j.LoggerFactory
 
@@ -25,6 +30,12 @@ object AstrorbitsParticle : ModInitializer {
 		ModPayloads.register()
 		ServerLifecycleEvents.SERVER_STARTING.register(ServerEffects::init)
 		ServerTickEvents.END_SERVER_TICK.register(ServerEffects::tick)
+		ServerPlayConnectionEvents.JOIN.register { listener, _, _ ->
+			val player = listener.player
+			if (ServerPlayNetworking.canSend(player, EffectHandshakePayload.TYPE)) {
+				ServerPlayNetworking.send(player, EffectHandshakePayload(PROTOCOL_VERSION, RNG_VERSION))
+			}
+		}
 		CommandRegistrationCallback.EVENT.register { dispatcher, _, _ -> EffectsCommand.register(dispatcher) }
 		logger.info("[effect] registered {} particle styles", ParticleStyles.all().size)
 	}

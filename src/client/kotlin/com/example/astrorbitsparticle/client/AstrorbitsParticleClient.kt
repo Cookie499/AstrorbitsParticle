@@ -1,6 +1,7 @@
 package com.example.astrorbitsparticle.client
 
 import com.example.astrorbitsparticle.net.EffectClearPayload
+import com.example.astrorbitsparticle.net.EffectHandshakePayload
 import com.example.astrorbitsparticle.net.EffectStartPayload
 import com.example.astrorbitsparticle.net.EffectStopPayload
 import com.example.astrorbitsparticle.particle.EffectAnchorOptions
@@ -16,6 +17,9 @@ object AstrorbitsParticleClient : ClientModInitializer {
 		}
 		ParticleGroupRegistry.register(EFFECT_RENDER_TYPE) { engine -> EffectParticleGroup(engine) }
 
+		ClientPlayNetworking.registerGlobalReceiver(EffectHandshakePayload.TYPE) { payload, context ->
+			context.client().execute { ClientEffects.handshake(payload) }
+		}
 		ClientPlayNetworking.registerGlobalReceiver(EffectStartPayload.TYPE) { payload, context ->
 			context.client().execute {
 				ClientEffects.start(payload)

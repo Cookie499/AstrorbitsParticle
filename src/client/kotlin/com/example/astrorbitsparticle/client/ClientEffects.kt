@@ -3,13 +3,17 @@ package com.example.astrorbitsparticle.client
 import com.example.astrorbitsparticle.AstrorbitsParticle
 import com.example.astrorbitsparticle.model.EffectDefinition
 import com.example.astrorbitsparticle.net.EffectClearPayload
+import com.example.astrorbitsparticle.net.EffectHandshakePayload
 import com.example.astrorbitsparticle.net.EffectStartPayload
 import com.example.astrorbitsparticle.net.EffectStopPayload
+import com.example.astrorbitsparticle.net.PROTOCOL_VERSION
+import com.example.astrorbitsparticle.net.RNG_VERSION
 import com.example.astrorbitsparticle.particle.EffectAnchorOptions
 import com.example.astrorbitsparticle.style.BoundEffect
 import com.example.astrorbitsparticle.style.EffectBinder
 import com.example.astrorbitsparticle.style.ParticleBuffer
 import net.minecraft.client.Minecraft
+import net.minecraft.network.chat.Component
 import net.minecraft.world.phys.AABB
 import net.minecraft.world.phys.Vec3
 
@@ -55,8 +59,41 @@ object ClientEffects {
 	private val definitions = LinkedHashMap<Int, EffectDefinition>()
 	private val boundCache = HashMap<Int, BoundEffect>()
 	private val active = LinkedHashMap<Long, ClientEffect>()
+	private var versionMatches: Boolean? = null
+
+	fun handshake(payload: EffectHandshakePayload) {
+		val protocolMatches = payload.protocolVersion == PROTOCOL_VERSION
+		val rngMatches = payload.rngVersion == RNG_VERSION
+		versionMatches = protocolMatches && rngMatches
+		if (versionMatches == true) {
+			AstrorbitsParticle.logger.info(
+				"[net] handshake ok: protocol={}, rng={}, client protocol={}, rng={}",
+				payload.protocolVersion, payload.rngVersion, PROTOCOL_VERSION, RNG_VERSION,
+			)
+			return
+		}
+		AstrorbitsParticle.logger.warn(
+			"[net] handshake mismatch: server protocol={} rng={}, client protocol={} rng={}; dropping effects",
+			payload.protocolVersion, payload.rngVersion, PROTOCOL_VERSION, RNG_VERSION,
+		)
+		active.clear()
+		boundCache.clear()
+		definitions.clear()
+		Minecraft.getInstance().player?.sendSystemMessage(
+			Component.literal(
+				"AstrorbitsParticle 版本不一致：服务端协议 ${payload.protocolVersion}、随机 ${payload.rngVersion}，" +
+					"客户端协议 ${PROTOCOL_VERSION}、随机 ${RNG_VERSION}。特效已停用。",
+			),
+		)
+	}
 
 	fun start(payload: EffectStartPayload) {
+		if (versionMatches == false) {
+			AstrorbitsParticle.logger.debug(
+				"[effect] dropped id={}: version mismatch", payload.effectId,
+			)
+			return
+		}
 		val definition = resolveDefinition(payload) ?: return
 		val bound = boundCache.getOrPut(payload.definitionHash) {
 			EffectBinder.bind(definition).getOrElse {

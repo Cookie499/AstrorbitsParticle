@@ -8,11 +8,33 @@ import net.minecraft.network.codec.StreamDecoder
 import net.minecraft.network.codec.StreamEncoder
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload
 
-/** 协议版本；改动包结构时递增。 */
-const val PROTOCOL_VERSION = 1
+/** 协议版本；改动包结构时递增，客户端在连接建立时与服务端比对。 */
+const val PROTOCOL_VERSION = 2
 
 /** 随机算法版本；改动 [com.example.astrorbitsparticle.math.HashRandom] 或流的取用顺序时递增。 */
 const val RNG_VERSION = 1
+
+/** 连接建立后发送一次，用于客户端校验两端的协议与随机算法版本。 */
+class EffectHandshakePayload(
+	val protocolVersion: Int,
+	val rngVersion: Int,
+) : CustomPacketPayload {
+	override fun type(): CustomPacketPayload.Type<EffectHandshakePayload> = TYPE
+
+	companion object {
+		val TYPE = CustomPacketPayload.Type<EffectHandshakePayload>(AstrorbitsParticle.id("handshake"))
+
+		val STREAM_CODEC: StreamCodec<RegistryFriendlyByteBuf, EffectHandshakePayload> = StreamCodec.of(
+			StreamEncoder { buf, payload ->
+				buf.writeVarInt(payload.protocolVersion)
+				buf.writeVarInt(payload.rngVersion)
+			},
+			StreamDecoder { buf ->
+				EffectHandshakePayload(buf.readVarInt(), buf.readVarInt())
+			},
+		)
+	}
+}
 
 class EffectStartPayload(
 	val effectId: Long,
@@ -95,6 +117,7 @@ class EffectClearPayload : CustomPacketPayload {
 
 object ModPayloads {
 	fun register() {
+		PayloadTypeRegistry.clientboundPlay().register(EffectHandshakePayload.TYPE, EffectHandshakePayload.STREAM_CODEC)
 		PayloadTypeRegistry.clientboundPlay().register(EffectStartPayload.TYPE, EffectStartPayload.STREAM_CODEC)
 		PayloadTypeRegistry.clientboundPlay().register(EffectStopPayload.TYPE, EffectStopPayload.STREAM_CODEC)
 		PayloadTypeRegistry.clientboundPlay().register(EffectClearPayload.TYPE, EffectClearPayload.STREAM_CODEC)
