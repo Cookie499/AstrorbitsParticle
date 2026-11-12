@@ -43,10 +43,12 @@ class ClientEffect(
 	fun sample(): ParticleBuffer {
 		update()
 		buffer.reset(bound.count)
-		val sampleAge = if (bound.definition.reverse) {
-			(bound.duration - age).coerceAtLeast(0f)
-		} else {
-			age
+		val sampleAge = when {
+			// 反向循环先按周期回绕，否则 age 超过 duration 后一直停在起始帧
+			bound.definition.reverse && bound.definition.loop ->
+				bound.duration - (age % bound.duration)
+			bound.definition.reverse -> (bound.duration - age).coerceAtLeast(0f)
+			else -> age
 		}
 		bound.style.sample(bound, origin, seed, sampleAge, buffer)
 		return buffer
