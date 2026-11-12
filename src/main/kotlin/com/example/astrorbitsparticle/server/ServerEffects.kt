@@ -270,6 +270,7 @@ object ServerEffects {
 			writeExampleDefinitions(dir)
 		}
 		definitions.clear()
+		loadDatapackDefinitions()
 		Files.list(dir).use { stream ->
 			stream.filter { it.fileName.toString().endsWith(".json") }.forEach { path ->
 				val name = path.fileName.toString().removeSuffix(".json")
@@ -283,6 +284,29 @@ object ServerEffects {
 				}.onFailure {
 					AstrorbitsParticle.logger.warn("[config] rejected effect {}: {}", name, it.message)
 				}
+			}
+		}
+	}
+
+	/** data/&lt;namespace&gt;/effects/&lt;name&gt;.json，config 目录的同 id 文件覆盖数据包版本。 */
+	private fun loadDatapackDefinitions() {
+		val manager = server?.resourceManager ?: return
+		val resources = runCatching {
+			manager.listResources("effects") { path -> path.path.endsWith(".json") }
+		}.getOrElse {
+			AstrorbitsParticle.logger.warn("[config] failed to list datapack effects: {}", it.message)
+			return
+		}
+		for ((fileId, resource) in resources) {
+			val name = fileId.path.removePrefix("effects/").removeSuffix(".json")
+			val id = Identifier.fromNamespaceAndPath(fileId.namespace, name)
+			runCatching {
+				val json = resource.open().use { it.readBytes().decodeToString() }
+				val definition = EffectDefinition.parse(json).getOrThrow()
+				definitions[id] = definition
+				AstrorbitsParticle.logger.info("[config] loaded datapack effect {}", id)
+			}.onFailure {
+				AstrorbitsParticle.logger.warn("[config] rejected datapack effect {}: {}", id, it.message)
 			}
 		}
 	}
