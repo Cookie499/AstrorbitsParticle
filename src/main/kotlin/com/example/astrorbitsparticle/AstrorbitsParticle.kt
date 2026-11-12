@@ -1,6 +1,7 @@
 package com.example.astrorbitsparticle
 
 import com.example.astrorbitsparticle.net.EffectHandshakePayload
+import com.example.astrorbitsparticle.net.EffectImpactPayload
 import com.example.astrorbitsparticle.net.ModPayloads
 import com.example.astrorbitsparticle.net.PROTOCOL_VERSION
 import com.example.astrorbitsparticle.net.RNG_VERSION
@@ -35,6 +36,9 @@ object AstrorbitsParticle : ModInitializer {
 			if (ServerPlayNetworking.canSend(player, EffectHandshakePayload.TYPE)) {
 				ServerPlayNetworking.send(player, EffectHandshakePayload(PROTOCOL_VERSION, RNG_VERSION))
 			}
+		}
+		ServerPlayNetworking.registerGlobalReceiver(EffectImpactPayload.TYPE) { payload, context ->
+			context.server().execute { ServerEffects.impact(context.player(), payload) }
 		}
 		CommandRegistrationCallback.EVENT.register { dispatcher, _, _ -> EffectsCommand.register(dispatcher) }
 		logger.info("[effect] registered {} particle styles", ParticleStyles.all().size)

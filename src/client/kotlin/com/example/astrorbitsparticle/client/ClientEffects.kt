@@ -2,8 +2,10 @@ package com.example.astrorbitsparticle.client
 
 import com.example.astrorbitsparticle.AstrorbitsParticle
 import com.example.astrorbitsparticle.model.EffectDefinition
+import com.example.astrorbitsparticle.model.SubEffectTrigger
 import com.example.astrorbitsparticle.net.EffectClearPayload
 import com.example.astrorbitsparticle.net.EffectHandshakePayload
+import com.example.astrorbitsparticle.net.EffectImpactPayload
 import com.example.astrorbitsparticle.net.EffectStartPayload
 import com.example.astrorbitsparticle.net.EffectStopPayload
 import com.example.astrorbitsparticle.net.PROTOCOL_VERSION
@@ -12,10 +14,16 @@ import com.example.astrorbitsparticle.particle.EffectAnchorOptions
 import com.example.astrorbitsparticle.style.BoundEffect
 import com.example.astrorbitsparticle.style.EffectBinder
 import com.example.astrorbitsparticle.style.ParticleBuffer
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking
 import net.minecraft.client.Minecraft
+import net.minecraft.client.multiplayer.ClientLevel
+import net.minecraft.core.BlockPos
 import net.minecraft.network.chat.Component
 import net.minecraft.world.phys.AABB
 import net.minecraft.world.phys.Vec3
+
+private const val IMPACT_CHECKS_PER_TICK = 128
+private const val MAX_IMPACT_REPORTS = 8
 
 class ClientEffect(
 	val id: Long,
@@ -30,9 +38,41 @@ class ClientEffect(
 		private set
 
 	val buffer = ParticleBuffer()
+	private val impactBuffer = ParticleBuffer()
+	private val impactedBlocks = HashSet<Long>()
+	private var impactReports: Int = 0
 	val cullBox: AABB = AABB(origin, origin).inflate(
 		(bound.radius * scale + bound.definition.visibility.boundsPadding).toDouble(),
 	)
+
+	/**
+	 * 客户端 tick 用独立缓冲采样并检测固体方块碰撞，返回新碰撞点（每 3 个 float 一组）。
+	 * 与渲染线程共用 [buffer] 会并发写同一组数组，因此单独分配 [impactBuffer]。
+	 */
+	fun collectImpacts(level: ClientLevel): FloatArray {
+		if (impactReports >= MAX_IMPACT_REPORTS) return EMPTY_POINTS
+		update()
+		sampleInto(impactBuffer)
+		if (impactBuffer.count == 0) return EMPTY_POINTS
+		val points = ArrayList<Float>(MAX_IMPACT_REPORTS * 3)
+		val step = (impactBuffer.count / IMPACT_CHECKS_PER_TICK).coerceAtLeast(1)
+		var i = 0
+		while (i < impactBuffer.count && impactReports < MAX_IMPACT_REPORTS) {
+			val pos = BlockPos.containing(
+				impactBuffer.x[i].toDouble(), impactBuffer.y[i].toDouble(), impactBuffer.z[i].toDouble(),
+			)
+			if (level.isLoaded(pos) && level.getBlockState(pos).isSolid) {
+				if (impactedBlocks.add(pos.asLong())) {
+					points += impactBuffer.x[i]
+					points += impactBuffer.y[i]
+					points += impactBuffer.z[i]
+					impactReports++
+				}
+			}
+			i += step
+		}
+		return points.toFloatArray()
+	}
 
 	fun update() {
 		age = baseAge + (System.nanoTime() - receivedNanos) / 1_000_000_000.0f
@@ -42,7 +82,12 @@ class ClientEffect(
 
 	fun sample(): ParticleBuffer {
 		update()
-		buffer.reset(bound.count)
+		sampleInto(buffer)
+		return buffer
+	}
+
+	private fun sampleInto(out: ParticleBuffer) {
+		out.reset(bound.count)
 		val sampleAge = when {
 			// 反向循环先按周期回绕，否则 age 超过 duration 后一直停在起始帧
 			bound.definition.reverse && bound.definition.loop ->
@@ -50,8 +95,11 @@ class ClientEffect(
 			bound.definition.reverse -> (bound.duration - age).coerceAtLeast(0f)
 			else -> age
 		}
-		bound.style.sample(bound, origin, seed, sampleAge, buffer)
-		return buffer
+		bound.style.sample(bound, origin, seed, sampleAge, out)
+	}
+
+	private companion object {
+		val EMPTY_POINTS = FloatArray(0)
 	}
 }
 
@@ -143,6 +191,16 @@ object ClientEffects {
 
 	fun tick() {
 		active.values.removeIf { it.expired() }
+		val level = Minecraft.getInstance().level ?: return
+		for (effect in active.values) {
+			val definition = effect.bound.definition
+			if (definition.subEffect == null || definition.subEffectTrigger != SubEffectTrigger.IMPACT) continue
+			if (!ClientPlayNetworking.canSend(EffectImpactPayload.TYPE)) continue
+			val points = effect.collectImpacts(level)
+			if (points.isNotEmpty()) {
+				ClientPlayNetworking.send(EffectImpactPayload(effect.id, points))
+			}
+		}
 	}
 
 	fun all(): Collection<ClientEffect> = active.values

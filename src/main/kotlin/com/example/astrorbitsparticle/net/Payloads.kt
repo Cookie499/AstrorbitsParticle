@@ -9,7 +9,7 @@ import net.minecraft.network.codec.StreamEncoder
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload
 
 /** 协议版本；改动包结构时递增，客户端在连接建立时与服务端比对。 */
-const val PROTOCOL_VERSION = 2
+const val PROTOCOL_VERSION = 3
 
 /** 随机算法版本；改动 [com.example.astrorbitsparticle.math.HashRandom] 或流的取用顺序时递增。 */
 const val RNG_VERSION = 1
@@ -115,11 +115,43 @@ class EffectClearPayload : CustomPacketPayload {
 	}
 }
 
+/**
+ * 客户端报告本 tick 检测到的碰撞点，每 3 个 float 一组世界坐标。
+ * 服务端只接受已订阅该特效的玩家发来的、位于定义可见范围内的点。
+ */
+class EffectImpactPayload(
+	val effectId: Long,
+	val positions: FloatArray,
+) : CustomPacketPayload {
+	override fun type(): CustomPacketPayload.Type<EffectImpactPayload> = TYPE
+
+	companion object {
+		const val MAX_POSITIONS = 8
+
+		val TYPE = CustomPacketPayload.Type<EffectImpactPayload>(AstrorbitsParticle.id("effect_impact"))
+
+		val STREAM_CODEC: StreamCodec<RegistryFriendlyByteBuf, EffectImpactPayload> = StreamCodec.of(
+			StreamEncoder { buf, payload ->
+				val count = (payload.positions.size / 3).coerceAtMost(MAX_POSITIONS)
+				buf.writeLong(payload.effectId)
+				buf.writeVarInt(count)
+				for (i in 0 until count * 3) buf.writeFloat(payload.positions[i])
+			},
+			StreamDecoder { buf ->
+				val effectId = buf.readLong()
+				val count = buf.readVarInt().coerceIn(0, MAX_POSITIONS)
+				EffectImpactPayload(effectId, FloatArray(count * 3) { buf.readFloat() })
+			},
+		)
+	}
+}
+
 object ModPayloads {
 	fun register() {
 		PayloadTypeRegistry.clientboundPlay().register(EffectHandshakePayload.TYPE, EffectHandshakePayload.STREAM_CODEC)
 		PayloadTypeRegistry.clientboundPlay().register(EffectStartPayload.TYPE, EffectStartPayload.STREAM_CODEC)
 		PayloadTypeRegistry.clientboundPlay().register(EffectStopPayload.TYPE, EffectStopPayload.STREAM_CODEC)
 		PayloadTypeRegistry.clientboundPlay().register(EffectClearPayload.TYPE, EffectClearPayload.STREAM_CODEC)
+		PayloadTypeRegistry.serverboundPlay().register(EffectImpactPayload.TYPE, EffectImpactPayload.STREAM_CODEC)
 	}
 }

@@ -25,6 +25,16 @@ enum class Blend {
 	}
 }
 
+/** 子特效触发方式：定义结束，或客户端报告粒子碰撞。 */
+enum class SubEffectTrigger {
+	END, IMPACT;
+
+	companion object {
+		fun parse(raw: String): SubEffectTrigger =
+			entries.firstOrNull { it.name.equals(raw, ignoreCase = true) } ?: END
+	}
+}
+
 data class Emission(
 	val mode: EmissionMode = EmissionMode.BURST,
 	val count: Int = 200,
@@ -71,6 +81,7 @@ data class EffectDefinition(
 	val loop: Boolean,
 	val reverse: Boolean,
 	val subEffect: Identifier?,
+	val subEffectTrigger: SubEffectTrigger,
 	val emission: Emission,
 	val physics: Physics,
 	val appearance: Appearance,
@@ -96,6 +107,7 @@ data class EffectDefinition(
 			val reverse = obj.bool("reverse", false)
 			val subEffect = obj.get("subEffect")?.takeIf { it.isJsonPrimitive }?.asString
 				?.takeIf { it.isNotEmpty() }?.let { Identifier.tryParse(it) }
+			val subEffectTrigger = SubEffectTrigger.parse(obj.string("subEffectTrigger", "end"))
 
 			val emission = obj.objectOrNull("emission")?.let { parseEmission(it, duration) }
 				?: parseEmission(JsonObject(), duration)
@@ -105,7 +117,7 @@ data class EffectDefinition(
 			val params = obj.objectOrNull("params") ?: JsonObject()
 
 			EffectDefinition(
-				style, duration, loop, reverse, subEffect,
+				style, duration, loop, reverse, subEffect, subEffectTrigger,
 				emission, physics, appearance, visibility, params, json,
 			)
 		}

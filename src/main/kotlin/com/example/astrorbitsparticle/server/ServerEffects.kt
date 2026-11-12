@@ -2,7 +2,9 @@ package com.example.astrorbitsparticle.server
 
 import com.example.astrorbitsparticle.AstrorbitsParticle
 import com.example.astrorbitsparticle.model.EffectDefinition
+import com.example.astrorbitsparticle.model.SubEffectTrigger
 import com.example.astrorbitsparticle.net.EffectClearPayload
+import com.example.astrorbitsparticle.net.EffectImpactPayload
 import com.example.astrorbitsparticle.net.EffectStartPayload
 import com.example.astrorbitsparticle.net.EffectStopPayload
 import com.example.astrorbitsparticle.net.ModPayloads
@@ -13,6 +15,7 @@ import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking
 import net.fabricmc.loader.api.FabricLoader
+import net.minecraft.core.BlockPos
 import net.minecraft.core.registries.Registries
 import net.minecraft.resources.Identifier
 import net.minecraft.resources.ResourceKey
@@ -50,11 +53,14 @@ class ServerEffect(
 	val subscribers: MutableSet<UUID> = HashSet(),
 	val definitionHash: Int = definition.source.hashCode(),
 	val durationTicks: Long = (definition.duration * 20f).toLong().coerceAtLeast(1),
-)
+) {
+	var impactSpawns: Int = 0
+}
 
 object ServerEffects {
 	private const val SCAN_INTERVAL = 10
 	private const val DEFINITION_CACHE_LIMIT = 128
+	private const val MAX_IMPACT_SUB_EFFECTS = 8
 
 	private var server: MinecraftServer? = null
 	private val effects = LinkedHashMap<Long, ServerEffect>()
@@ -137,6 +143,41 @@ object ServerEffects {
 		server?.playerList?.players?.forEach { ServerPlayNetworking.send(it, payload) }
 	}
 
+	/** 在客户端报告的碰撞点生成一次子特效；总次数按特效封顶。 */
+	fun impact(player: ServerPlayer, payload: EffectImpactPayload) {
+		val effect = effects[payload.effectId] ?: return
+		val definition = effect.definition
+		if (definition.subEffectTrigger != SubEffectTrigger.IMPACT) return
+		val target = definition.subEffect?.let(definitions::get) ?: return
+		if (target.subEffect != null) return
+		if (player.uuid !in effect.subscribers) return
+		if (player.level().dimension() != effect.dimension) return
+		val level = server?.getLevel(effect.dimension) ?: return
+		val distance = definition.visibility.viewDistance + definition.visibility.boundsPadding
+		val maxDistanceSqr = (distance * distance).toDouble()
+		var spawned = 0
+		var i = 0
+		while (i + 2 < payload.positions.size && effect.impactSpawns < MAX_IMPACT_SUB_EFFECTS) {
+			val x = payload.positions[i].toDouble()
+			val y = payload.positions[i + 1].toDouble()
+			val z = payload.positions[i + 2].toDouble()
+			i += 3
+			if (!x.isFinite() || !y.isFinite() || !z.isFinite()) continue
+			val position = Vec3(x, y, z)
+			if (position.distanceToSqr(effect.origin) > maxDistanceSqr) continue
+			if (!level.isLoaded(BlockPos.containing(position))) continue
+			if (play(target, level, position, 1f, null) == null) continue
+			effect.impactSpawns++
+			spawned++
+		}
+		if (spawned > 0) {
+			AstrorbitsParticle.logger.info(
+				"[effect] impact id={} spawned {} sub-effect(s) of {}",
+				effect.id, spawned, target.style,
+			)
+		}
+	}
+
 	fun list(): List<ServerEffect> = effects.values.toList()
 
 	fun definitions(): Map<Identifier, EffectDefinition> = definitions
@@ -165,6 +206,7 @@ object ServerEffects {
 				}
 			}
 			val subId = effect.definition.subEffect ?: continue
+			if (effect.definition.subEffectTrigger != SubEffectTrigger.END) continue
 			val target = definitions[subId] ?: continue
 			if (target.subEffect != null) continue
 			val level = server.getLevel(effect.dimension) ?: continue
