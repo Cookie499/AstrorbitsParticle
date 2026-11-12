@@ -70,6 +70,7 @@ data class EffectDefinition(
 	val duration: Float,
 	val loop: Boolean,
 	val reverse: Boolean,
+	val subEffect: Identifier?,
 	val emission: Emission,
 	val physics: Physics,
 	val appearance: Appearance,
@@ -93,6 +94,8 @@ data class EffectDefinition(
 			val duration = obj.float("duration", 4f).coerceIn(0.05f, MAX_DURATION)
 			val loop = obj.bool("loop", false)
 			val reverse = obj.bool("reverse", false)
+			val subEffect = obj.get("subEffect")?.takeIf { it.isJsonPrimitive }?.asString
+				?.takeIf { it.isNotEmpty() }?.let { Identifier.tryParse(it) }
 
 			val emission = obj.objectOrNull("emission")?.let { parseEmission(it, duration) }
 				?: parseEmission(JsonObject(), duration)
@@ -101,7 +104,10 @@ data class EffectDefinition(
 			val visibility = obj.objectOrNull("visibility")?.let(::parseVisibility) ?: Visibility()
 			val params = obj.objectOrNull("params") ?: JsonObject()
 
-			EffectDefinition(style, duration, loop, reverse, emission, physics, appearance, visibility, params, json)
+			EffectDefinition(
+				style, duration, loop, reverse, subEffect,
+				emission, physics, appearance, visibility, params, json,
+			)
 		}
 
 		private fun parseEmission(obj: JsonObject, duration: Float): Emission {

@@ -152,6 +152,7 @@ object ServerEffects {
 	}
 
 	private fun expire(server: MinecraftServer, now: Long) {
+		val pending = ArrayList<Triple<EffectDefinition, ServerLevel, Vec3>>()
 		val iterator = effects.values.iterator()
 		while (iterator.hasNext()) {
 			val effect = iterator.next()
@@ -163,6 +164,14 @@ object ServerEffects {
 					ServerPlayNetworking.send(it, payload)
 				}
 			}
+			val subId = effect.definition.subEffect ?: continue
+			val target = definitions[subId] ?: continue
+			if (target.subEffect != null) continue
+			val level = server.getLevel(effect.dimension) ?: continue
+			pending += Triple(target, level, effect.origin)
+		}
+		for ((definition, level, origin) in pending) {
+			play(definition, level, origin, 1f, null)
 		}
 	}
 
