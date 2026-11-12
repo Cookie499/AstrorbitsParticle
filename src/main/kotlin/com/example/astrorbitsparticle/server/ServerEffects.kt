@@ -81,7 +81,13 @@ object ServerEffects {
 		scan(server, now)
 	}
 
-	fun play(definition: EffectDefinition, level: ServerLevel, origin: Vec3, scale: Float = 1f): ServerEffect? {
+	fun play(
+		definition: EffectDefinition,
+		level: ServerLevel,
+		origin: Vec3,
+		scale: Float = 1f,
+		seed: Long? = null,
+	): ServerEffect? {
 		val bound = EffectBinder.bind(definition).getOrElse {
 			AstrorbitsParticle.logger.warn(
 				"[effect] rejected definition {}: {}", definition.style, it.message,
@@ -94,7 +100,7 @@ object ServerEffects {
 		val effect = ServerEffect(
 			id = id,
 			definition = definition,
-			seed = level.random.nextLong(),
+			seed = seed ?: level.random.nextLong(),
 			dimension = level.dimension(),
 			origin = origin,
 			scale = scale,

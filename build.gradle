@@ -98,7 +98,11 @@ jar {
 publishing {
 	publications {
 		create("mavenJava", MavenPublication) {
-			from components.java
+			// 只发布构建产物，不带依赖元数据，避免调用方解析 Minecraft 依赖
+			artifact(tasks.named("jar"))
+			artifact(tasks.named("sourcesJar")) {
+				classifier = "sources"
+			}
 		}
 	}
 

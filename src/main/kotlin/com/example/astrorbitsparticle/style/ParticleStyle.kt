@@ -43,6 +43,13 @@ object ParticleStyles {
 		byId[style.id] = style
 	}
 
+	/** 供公开 API 使用：id 已存在时返回 false，不覆盖。 */
+	fun registerIfAbsent(style: ParticleStyle): Boolean {
+		if (byId.containsKey(style.id)) return false
+		byId[style.id] = style
+		return true
+	}
+
 	fun get(id: Identifier): ParticleStyle? = byId[id.toString()]
 
 	fun getOrNull(id: String): ParticleStyle? = byId[id]
