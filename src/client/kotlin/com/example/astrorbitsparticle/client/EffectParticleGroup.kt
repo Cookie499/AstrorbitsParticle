@@ -11,11 +11,13 @@ import net.minecraft.client.particle.SingleQuadParticle
 import net.minecraft.client.renderer.culling.Frustum
 import net.minecraft.client.renderer.state.level.ParticleGroupRenderState
 import net.minecraft.client.renderer.state.level.QuadParticleRenderState
-import net.minecraft.client.renderer.texture.TextureAtlas
+import net.minecraft.client.resources.model.sprite.SpriteId
 import net.minecraft.core.BlockPos
 import net.minecraft.resources.Identifier
 
 val EFFECT_RENDER_TYPE = ParticleRenderType("astrorbitsparticle:effect", "AOP")
+
+private val PARTICLE_ATLAS = Identifier.withDefaultNamespace("particles")
 
 /**
  * 所有特效共用一个粒子组：组负责推进年龄、做视锥剔除，
@@ -83,8 +85,7 @@ class EffectParticleGroup(engine: ParticleEngine) : ParticleGroup<Particle>(engi
 
 	private fun spriteInfo(id: Identifier): SpriteInfo = sprites.getOrPut(id) {
 		runCatching {
-			val atlas = Minecraft.getInstance().atlasManager.getAtlasOrThrow(TextureAtlas.LOCATION_PARTICLES)
-			val sprite = atlas.getSprite(id)
+			val sprite = Minecraft.getInstance().atlasManager.get(SpriteId(PARTICLE_ATLAS, id))
 			SpriteInfo(
 				layer = SingleQuadParticle.Layer.bySprite(sprite),
 				u0 = sprite.u0,
