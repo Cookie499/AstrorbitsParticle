@@ -1,5 +1,7 @@
 package com.example.astrorbitsparticle
 
+import com.example.astrorbitsparticle.style.BuiltinStyles
+import com.example.astrorbitsparticle.style.ParticleStyles
 import net.fabricmc.api.ModInitializer
 import net.minecraft.resources.Identifier
 import org.slf4j.LoggerFactory
@@ -7,14 +9,11 @@ import org.slf4j.LoggerFactory
 object AstrorbitsParticle : ModInitializer {
 	const val MOD_ID: String = "astrorbitsparticle"
 
-	private val LOGGER = LoggerFactory.getLogger(MOD_ID)
+	val logger = LoggerFactory.getLogger(MOD_ID)
 
 	override fun onInitialize() {
-		// This code runs as soon as Minecraft is in a mod-load-ready state.
-		// However, some things (like resources) may still be uninitialized.
-		// Proceed with mild caution.
-
-		LOGGER.info("Hello Fabric world!")
+		BuiltinStyles.registerAll()
+		logger.info("[effect] registered {} particle styles", ParticleStyles.all().size)
 	}
 
 	fun id(path: String): Identifier
