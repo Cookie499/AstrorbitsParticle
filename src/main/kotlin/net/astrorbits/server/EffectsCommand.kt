@@ -1,6 +1,7 @@
 package net.astrorbits.server
 
 import net.astrorbits.AstrorbitsParticle
+import net.astrorbits.model.EffectDefinition
 import net.astrorbits.style.ParticleStyles
 import net.astrorbits.style.StyleDocs
 import com.mojang.brigadier.CommandDispatcher
@@ -22,14 +23,21 @@ object EffectsCommand {
 						.then(
 							Commands.literal("play")
 								.then(
-									Commands.argument("definition", StringArgumentType.string())
+									Commands.argument("definition", StringArgumentType.greedyString())
 										.executes { ctx ->
 											val source = ctx.source
-											val raw = StringArgumentType.getString(ctx, "definition")
-											val id = Identifier.tryParse(
-												if (':' in raw) raw else "${AstrorbitsParticle.MOD_ID}:$raw",
-											)
-											val definition = id?.let(ServerEffects::findDefinition)
+											val raw = StringArgumentType.getString(ctx, "definition").trim()
+											val definition = if (raw.startsWith("{")) {
+												EffectDefinition.parse(raw).getOrElse {
+													source.sendFailure(Component.literal("定义解析失败：${it.message}"))
+													return@executes 0
+												}
+											} else {
+												val id = Identifier.tryParse(
+													if (':' in raw) raw else "${AstrorbitsParticle.MOD_ID}:$raw",
+												)
+												id?.let(ServerEffects::findDefinition)
+											}
 											if (definition == null) {
 												source.sendFailure(Component.literal("找不到特效定义：$raw"))
 												return@executes 0

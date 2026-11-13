@@ -9,7 +9,13 @@
 
 1. 启动一次服务器，生成 `config/astrorbitsparticle/scenes.json` 与 `effects/` 下的示例定义。
 2. 修改场景范围为舞台和观众区；`effects/` 下每个 json 的文件名就是定义 id。
-3. `/astrorbits effect play radial_burst` 在当前位置播放，`/astrorbits effect list` 查看活跃特效。
+3. ``effect play` 也接受内联定义，不需要先写文件：
+
+```text
+/astrorbits effect play {"style":"astrorbitsparticle:radial_burst","duration":1.5,"visibility":{"requireScene":false},"params":{"speed":5}}
+```
+
+/astrorbits effect play radial_burst` 在当前位置播放，`/astrorbits effect list` 查看活跃特效。
 4. 改完配置执行 `/astrorbits reload`。
 
 命令需要 gamemaster 权限。场景与定义都在 `config/astrorbitsparticle/` 下。
