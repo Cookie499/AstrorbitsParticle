@@ -53,6 +53,7 @@ class ServerEffect(
 	val subscribers: MutableSet<UUID> = HashSet(),
 	val definitionHash: Int = definition.source.hashCode(),
 	val durationTicks: Long = (definition.duration * 20f).toLong().coerceAtLeast(1),
+	val depth: Int = 0,
 ) {
 	var impactSpawns: Int = 0
 }
@@ -61,6 +62,14 @@ object ServerEffects {
 	private const val SCAN_INTERVAL = 10
 	private const val DEFINITION_CACHE_LIMIT = 128
 	private const val MAX_IMPACT_SUB_EFFECTS = 8
+	private const val MAX_SUB_DEPTH = 3
+
+	private data class SubSpawn(
+		val definition: EffectDefinition,
+		val level: ServerLevel,
+		val origin: Vec3,
+		val depth: Int,
+	)
 
 	private var server: MinecraftServer? = null
 	private val effects = LinkedHashMap<Long, ServerEffect>()
@@ -93,6 +102,7 @@ object ServerEffects {
 		origin: Vec3,
 		scale: Float = 1f,
 		seed: Long? = null,
+		depth: Int = 0,
 	): ServerEffect? {
 		val bound = EffectBinder.bind(definition).getOrElse {
 			AstrorbitsParticle.logger.warn(
@@ -114,11 +124,12 @@ object ServerEffects {
 			endTick = if (definition.loop) Long.MAX_VALUE else level.gameTime + durationTicks,
 			scene = scene,
 			durationTicks = durationTicks,
+			depth = depth,
 		)
 		effects[id] = effect
 		AstrorbitsParticle.logger.info(
-			"[effect] spawned {} id={} scene={} origin={}",
-			definition.style, id, scene?.id ?: "-", origin,
+			"[effect] spawned {} id={} depth={} scene={} origin={}",
+			definition.style, id, depth, scene?.id ?: "-", origin,
 		)
 		return effect
 	}
@@ -166,7 +177,8 @@ object ServerEffects {
 			val position = Vec3(x, y, z)
 			if (position.distanceToSqr(effect.origin) > maxDistanceSqr) continue
 			if (!level.isLoaded(BlockPos.containing(position))) continue
-			if (play(target, level, position, 1f, null) == null) continue
+			if (effect.depth >= MAX_SUB_DEPTH) break
+			if (play(target, level, position, 1f, null, effect.depth + 1) == null) continue
 			effect.impactSpawns++
 			spawned++
 		}
@@ -194,7 +206,7 @@ object ServerEffects {
 	}
 
 	private fun expire(server: MinecraftServer, now: Long) {
-		val pending = ArrayList<Triple<EffectDefinition, ServerLevel, Vec3>>()
+		val pending = ArrayList<SubSpawn>()
 		val iterator = effects.values.iterator()
 		while (iterator.hasNext()) {
 			val effect = iterator.next()
@@ -208,13 +220,13 @@ object ServerEffects {
 			}
 			val subId = effect.definition.subEffect ?: continue
 			if (effect.definition.subEffectTrigger != SubEffectTrigger.END) continue
+			if (effect.depth >= MAX_SUB_DEPTH) continue
 			val target = definitions[subId] ?: continue
-			if (target.subEffect != null) continue
 			val level = server.getLevel(effect.dimension) ?: continue
-			pending += Triple(target, level, effect.origin)
+			pending += SubSpawn(target, level, effect.origin, effect.depth + 1)
 		}
-		for ((definition, level, origin) in pending) {
-			play(definition, level, origin, 1f, null)
+		for (spawn in pending) {
+			play(spawn.definition, spawn.level, spawn.origin, 1f, null, spawn.depth)
 		}
 	}
 
