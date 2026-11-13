@@ -69,6 +69,21 @@ tasks.withType(JavaCompile).configureEach {
 	it.options.release = 25
 }
 
+def javaOutputDirs = files(
+	layout.buildDirectory.dir('classes/java/main'),
+	layout.buildDirectory.dir('classes/java/client'),
+)
+
+tasks.register('createJavaOutputDirs') {
+	// 没有 Java 源码时 Gradle 不创建输出目录，Fabric Loader 会在开发环境警告类路径缺失
+	outputs.upToDateWhen { false }
+	doLast {
+		javaOutputDirs.each { it.mkdirs() }
+	}
+}
+
+tasks.named('classes') { dependsOn tasks.named('createJavaOutputDirs') }
+
 kotlin {
 	compilerOptions {
 		jvmTarget = JvmTarget.JVM_25
