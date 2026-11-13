@@ -93,7 +93,7 @@ val COMMON_SCHEMA: StyleSchema = StyleSchema(
 		vecSpec("physics.gravity", 0f, -9.8f, 0f, "重力加速度（块/秒²），也可写成单个 Y 分量"),
 		numSpec("physics.drag", 0f, "线性阻尼（1/秒）", "0..10", 0f, 10f),
 		vecSpec("physics.wind", 0f, 0f, 0f, "风场速度（块/秒）"),
-		textSpec("appearance.sprite", "minecraft:generic_0", "粒子图集里的贴图 id"),
+		textSpec("appearance.sprite", "minecraft:generic_0", "粒子贴图 id，也可以写原版粒子定义 id（如 end_rod）"),
 		numSpec("appearance.size", 0.2f, "面片边长（块）", "0..16", 0f, 16f),
 		numSpec("appearance.sizeJitter", 0.15f, "尺寸随机抖动比例", "0..1", 0f, 1f),
 		textSpec("appearance.sizeByAge", "[[0,1],[1,0]]", "尺寸随归一化年龄的曲线"),

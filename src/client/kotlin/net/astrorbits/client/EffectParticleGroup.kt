@@ -189,11 +189,26 @@ class EffectParticleGroup(engine: ParticleEngine) : ParticleGroup<Particle>(engi
 		return (raw shl 4) or (raw shl 20)
 	}
 
+	/** 允许直接写原版粒子定义 id（如 end_rod），取它 textures 数组里的第一张贴图。 */
+	private fun resolveSprite(id: Identifier): Identifier {
+		val jsonId = Identifier.fromNamespaceAndPath(id.namespace, "particles/${id.path}.json")
+		val resource = Minecraft.getInstance().resourceManager.getResource(jsonId).orElse(null) ?: return id
+		return runCatching {
+			resource.open().use { stream ->
+				val textures = com.google.gson.JsonParser.parseReader(stream.bufferedReader())
+					.asJsonObject.getAsJsonArray("textures") ?: return@use id
+				textures.firstOrNull()?.asString?.let(Identifier::tryParse) ?: id
+			}
+		}.getOrDefault(id)
+	}
+
 	private fun spriteInfo(id: Identifier): SpriteInfo = sprites.getOrPut(id) {
 		runCatching {
-			val sprite = Minecraft.getInstance().atlasManager.get(SpriteId(PARTICLE_ATLAS, id))
+			val resolved = resolveSprite(id)
+			val sprite = Minecraft.getInstance().atlasManager.get(SpriteId(PARTICLE_ATLAS, resolved))
 			net.astrorbits.AstrorbitsParticle.logger.debug(
-				"[effect] sprite {} uv=({}, {})-({}, {})", id, sprite.u0, sprite.v0, sprite.u1, sprite.v1,
+				"[effect] sprite {} -> {} uv=({}, {})-({}, {})",
+				id, resolved, sprite.u0, sprite.v0, sprite.u1, sprite.v1,
 			)
 			SpriteInfo(
 				layer = SingleQuadParticle.Layer.bySprite(sprite),
