@@ -12,20 +12,20 @@
 3. ``effect play` 也接受内联定义，不需要先写文件：
 
 ```text
-/astrorbits effect play {"style":"astrorbitsparticle:radial_burst","duration":1.5,"visibility":{"requireScene":false},"params":{"speed":5}}
+/astrorticle effect play {"style":"astrorbitsparticle:radial_burst","duration":1.5,"visibility":{"requireScene":false},"params":{"speed":5}}
 ```
 
-/astrorbits effect play radial_burst` 在当前位置播放，`/astrorbits effect list` 查看活跃特效。
-4. 改完配置执行 `/astrorbits reload`。
+/astrorticle effect play radial_burst` 在当前位置播放，`/astrorticle effect list` 查看活跃特效。
+4. 改完配置执行 `/astrorticle reload`。
 
 命令需要 gamemaster 权限。场景与定义都在 `config/astrorbitsparticle/` 下。
 
 没有布景时可以直接用内置预设验证样式：
 
 ```text
-/astrorbits test list        查看可用预设
-/astrorbits test radial      在当前位置播放单个预设
-/astrorbits test all         把 9 个预设围成一圈同时播放
+/astrorticle test list        查看可用预设
+/astrorticle test radial      在当前位置播放单个预设
+/astrorticle test all         把 9 个预设围成一圈同时播放
 ```
 
 ## 文档

@@ -16,7 +16,7 @@ import net.minecraft.server.permissions.Permissions
 object EffectsCommand {
 	fun register(dispatcher: CommandDispatcher<CommandSourceStack>) {
 		dispatcher.register(
-			Commands.literal("astrorbits")
+			Commands.literal("astrorticle")
 				.requires { it.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER) }
 				.then(
 					Commands.literal("effect")
