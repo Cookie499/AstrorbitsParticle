@@ -227,7 +227,30 @@ class BoundEffect(
 	val physics: Physics,
 	val styleParams: BoundStyle,
 ) {
-	val radius: Float = 16f
+	/** 采样各年龄的粒子位置，取最大距离外扩 1 格，避免飞得远的样式被提前剔除。 */
+	val radius: Float = boundsRadius()
+
+	private fun boundsRadius(): Float {
+		val buffer = ParticleBuffer()
+		var maxSq = 0.0
+		val samples = 6
+		val stride = (count / 2048).coerceAtLeast(1)
+		for (step in 0..samples) {
+			val sampleAge = duration * step / samples
+			buffer.reset(count)
+			style.sample(this, Vec3.ZERO, 0L, sampleAge, buffer)
+			var i = 0
+			while (i < buffer.count) {
+				val dx = buffer.x[i].toDouble()
+				val dy = buffer.y[i].toDouble()
+				val dz = buffer.z[i].toDouble()
+				val distance = dx * dx + dy * dy + dz * dz
+				if (distance > maxSq) maxSq = distance
+				i += stride
+			}
+		}
+		return (kotlin.math.sqrt(maxSq).toFloat() + 1f).coerceIn(1f, 256f)
+	}
 }
 
 class BoundAppearance(

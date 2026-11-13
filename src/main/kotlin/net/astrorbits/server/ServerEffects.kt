@@ -54,6 +54,7 @@ class ServerEffect(
 	val definitionHash: Int = definition.source.hashCode(),
 	val durationTicks: Long = (definition.duration * 20f).toLong().coerceAtLeast(1),
 	val depth: Int = 0,
+	val boundsRadius: Float = 16f,
 ) {
 	var impactSpawns: Int = 0
 }
@@ -125,6 +126,7 @@ object ServerEffects {
 			scene = scene,
 			durationTicks = durationTicks,
 			depth = depth,
+			boundsRadius = bound.radius * scale,
 		)
 		effects[id] = effect
 		AstrorbitsParticle.logger.info(
@@ -256,7 +258,7 @@ object ServerEffects {
 		val scene = effect.scene
 		if (visibility.requireScene && (scene == null || !scene.contains(player.position()))) return false
 		val limit = (scene?.viewDistance ?: visibility.viewDistance)
-			.coerceAtMost(visibility.viewDistance) + 16f + visibility.boundsPadding
+			.coerceAtMost(visibility.viewDistance) + effect.boundsRadius + visibility.boundsPadding
 		// 已在订阅中的玩家用更大的退出半径，避免在边界反复收发。
 		val radius = if (subscribed) limit * 1.15f else limit
 		return player.position().distanceToSqr(effect.origin) <= (radius * radius).toDouble()
