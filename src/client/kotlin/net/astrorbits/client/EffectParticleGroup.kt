@@ -80,7 +80,7 @@ class EffectParticleGroup(engine: ParticleEngine) : ParticleGroup<Particle>(engi
 			if (buffer.count == 0) continue
 			val sprite = spriteInfo(effect.bound.appearance.sprite)
 			val layer = if (effect.bound.appearance.blend == Blend.ADDITIVE) {
-				AdditiveParticles.layer
+				AdditiveParticles.layerFor(sprite.layer)
 			} else {
 				sprite.layer
 			}

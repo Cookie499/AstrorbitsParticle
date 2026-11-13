@@ -24,6 +24,11 @@ object AdditiveParticles {
 	val layer: SingleQuadParticle.Layer = SingleQuadParticle.Layer(true, particleAtlas, pipeline)
 
 	private var assigned = false
+	private var shaderPackActive = false
+
+	/** 光影启用时 Iris 仍会丢失我们的纹理绑定，退回原版半透明层保证贴图正确。 */
+	fun layerFor(fallback: SingleQuadParticle.Layer): SingleQuadParticle.Layer =
+		if (shaderPackActive) fallback else layer
 
 	/**
 	 * 客户端初始化时 Iris 可能还没建立程序表，过早登记会被丢弃。
@@ -36,6 +41,7 @@ object AdditiveParticles {
 			val programClass = Class.forName("net.irisshaders.iris.api.v0.IrisProgram")
 			val api = apiClass.getMethod("getInstance").invoke(null)
 			val inUse = apiClass.getMethod("isShaderPackInUse").invoke(api) as Boolean
+			shaderPackActive = inUse
 			if (!inUse) return
 			val program = programClass.getField("PARTICLES_TRANSLUCENT").get(null)
 			apiClass.getMethod("assignPipeline", RenderPipeline::class.java, programClass)
