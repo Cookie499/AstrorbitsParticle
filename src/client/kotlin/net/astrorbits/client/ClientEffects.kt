@@ -32,10 +32,8 @@ class ClientEffect(
 	val origin: Vec3,
 	val scale: Float,
 	private val baseAge: Float,
-	private val receivedNanos: Long,
+	private val startGameTime: Long,
 ) {
-	var age: Float = baseAge
-		private set
 
 	val buffer = ParticleBuffer()
 	private val impactBuffer = ParticleBuffer()
@@ -51,8 +49,7 @@ class ClientEffect(
 	 */
 	fun collectImpacts(level: ClientLevel): FloatArray {
 		if (impactReports >= MAX_IMPACT_REPORTS) return EMPTY_POINTS
-		update()
-		sampleInto(impactBuffer)
+		sampleInto(impactBuffer, ageAt(level.gameTime, 0f))
 		if (impactBuffer.count == 0) return EMPTY_POINTS
 		val points = ArrayList<Float>(MAX_IMPACT_REPORTS * 3)
 		val step = (impactBuffer.count / IMPACT_CHECKS_PER_TICK).coerceAtLeast(1)
@@ -74,19 +71,17 @@ class ClientEffect(
 		return points.toFloatArray()
 	}
 
-	fun update() {
-		age = baseAge + (System.nanoTime() - receivedNanos) / 1_000_000_000.0f
-	}
+	fun ageAt(gameTime: Long, partialTick: Float): Float =
+		baseAge + ((gameTime - startGameTime).coerceAtLeast(0L) + partialTick) / 20f
 
-	fun expired(): Boolean = !bound.definition.loop && age >= bound.duration
+	fun expired(gameTime: Long): Boolean = !bound.definition.loop && ageAt(gameTime, 0f) >= bound.duration
 
-	fun sample(): ParticleBuffer {
-		update()
-		sampleInto(buffer)
+	fun sample(gameTime: Long, partialTick: Float): ParticleBuffer {
+		sampleInto(buffer, ageAt(gameTime, partialTick))
 		return buffer
 	}
 
-	private fun sampleInto(out: ParticleBuffer) {
+	private fun sampleInto(out: ParticleBuffer, age: Float) {
 		out.reset(bound.count)
 		val sampleAge = when {
 			// 反向循环先按周期回绕，否则 age 超过 duration 后一直停在起始帧
@@ -161,7 +156,7 @@ object ClientEffects {
 			origin = Vec3(payload.x.toDouble(), payload.y.toDouble(), payload.z.toDouble()),
 			scale = payload.scale,
 			baseAge = baseAge,
-			receivedNanos = System.nanoTime(),
+			startGameTime = Minecraft.getInstance().level?.gameTime ?: 0L,
 		)
 		AstrorbitsParticle.logger.info(
 			"[effect] client start id={} style={} particles={}",
@@ -190,8 +185,8 @@ object ClientEffects {
 	}
 
 	fun tick() {
-		active.values.removeIf { it.expired() }
 		val level = Minecraft.getInstance().level ?: return
+		active.values.removeIf { it.expired(level.gameTime) }
 		for (effect in active.values) {
 			val definition = effect.bound.definition
 			if (definition.subEffect == null || definition.subEffectTrigger != SubEffectTrigger.IMPACT) continue

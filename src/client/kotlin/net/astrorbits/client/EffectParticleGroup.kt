@@ -76,7 +76,7 @@ class EffectParticleGroup(engine: ParticleEngine) : ParticleGroup<Particle>(engi
 
 		var quads = 0
 		for (effect in visible) {
-			val buffer = effect.sample()
+			val buffer = effect.sample(level.gameTime, partialTick)
 			if (buffer.count == 0) continue
 			val sprite = spriteInfo(effect.bound.appearance.sprite)
 			val layer = if (effect.bound.appearance.blend == Blend.ADDITIVE) {
@@ -89,7 +89,7 @@ class EffectParticleGroup(engine: ParticleEngine) : ParticleGroup<Particle>(engi
 			val oy = effect.origin.y.toFloat()
 			val oz = effect.origin.z.toFloat()
 			val scale = effect.scale
-			val age = effect.age
+			val age = effect.ageAt(level.gameTime, partialTick)
 			val step = maxOf(globalStride, lodStride(effect.origin.distanceToSqr(cameraPos)))
 			val spin = effect.bound.appearance.spin.at(age)
 			val quadRotation = if (spin != 0f) {
