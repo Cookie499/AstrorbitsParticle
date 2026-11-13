@@ -32,7 +32,7 @@ private const val STRETCH_SEGMENTS = 3
  * 并把全部粒子写进同一个 QuadParticleRenderState，逐粒子不创建 Particle 对象。
  */
 class EffectParticleGroup(engine: ParticleEngine) : ParticleGroup<Particle>(engine) {
-	private val sprites = HashMap<Identifier, SpriteInfo>()
+	private val sprites = HashMap<String, SpriteInfo>()
 	private var loggedFirstFrame = false
 	private var adaptiveStride = 1
 	private var slowFrames = 0
@@ -78,7 +78,7 @@ class EffectParticleGroup(engine: ParticleEngine) : ParticleGroup<Particle>(engi
 		for (effect in visible) {
 			val buffer = effect.sample(level.gameTime, partialTick)
 			if (buffer.count == 0) continue
-			val sprite = spriteInfo(effect.bound.appearance.sprite)
+			val sprite = spriteInfo(effect.bound.appearance.sprite, effect.seed)
 			val layer = if (effect.bound.appearance.blend == Blend.ADDITIVE) {
 				AdditiveParticles.layerFor(sprite.layer)
 			} else {
@@ -111,10 +111,14 @@ class EffectParticleGroup(engine: ParticleEngine) : ParticleGroup<Particle>(engi
 				val pz = (oz + (buffer.z[i] - oz) * scale - cameraPos.z).toFloat()
 				val size = buffer.size[i] * scale
 				val color = buffer.argb[i]
+				val frame = if (sprite.frames > 1) {
+					((effect.seed ushr 8) + i + level.gameTime / 2).mod(sprite.frames.toLong()).toInt()
+				} else 0
+				val fv0 = sprite.v0 + sprite.frameV * frame
 				state.add(
 					layer, px, py, pz,
 					quadRotation.x, quadRotation.y, quadRotation.z, quadRotation.w,
-					size, sprite.u0, sprite.u1, sprite.v0, sprite.v1, color, light,
+					size, sprite.u0, sprite.u1, fv0, fv0 + sprite.frameV, color, light,
 				)
 				if (stretched) {
 					for (segment in 1 until STRETCH_SEGMENTS) {
@@ -190,40 +194,48 @@ class EffectParticleGroup(engine: ParticleEngine) : ParticleGroup<Particle>(engi
 	}
 
 	/** 允许直接写原版粒子定义 id（如 end_rod），取它 textures 数组里的第一张贴图。 */
-	private fun resolveSprite(id: Identifier): Identifier {
+	private fun resolveTextures(id: Identifier): List<Identifier> {
 		val jsonId = Identifier.fromNamespaceAndPath(id.namespace, "particles/${id.path}.json")
-		val resource = Minecraft.getInstance().resourceManager.getResource(jsonId).orElse(null) ?: return id
+		val resource = Minecraft.getInstance().resourceManager.getResource(jsonId).orElse(null) ?: return listOf(id)
 		return runCatching {
 			resource.open().use { stream ->
 				val textures = com.google.gson.JsonParser.parseReader(stream.bufferedReader())
-					.asJsonObject.getAsJsonArray("textures") ?: return@use id
-				textures.firstOrNull()?.asString?.let(Identifier::tryParse) ?: id
+					.asJsonObject.getAsJsonArray("textures") ?: return@use listOf(id)
+				textures.mapNotNull { it.asString?.let(Identifier::tryParse) }.ifEmpty { listOf(id) }
 			}
-		}.getOrDefault(id)
+		}.getOrDefault(listOf(id))
 	}
 
-	private fun spriteInfo(id: Identifier): SpriteInfo = sprites.getOrPut(id) {
+	private fun spriteInfo(id: Identifier, seed: Long): SpriteInfo {
+		val variants = resolveTextures(id)
+		val variant = if (variants.size <= 1) 0 else ((seed ushr 1) % variants.size).toInt()
+		return sprites.getOrPut("$id#$variant") { loadSprite(id, variants[variant]) }
+	}
+
+	private fun loadSprite(id: Identifier, resolved: Identifier): SpriteInfo =
 		runCatching {
-			val resolved = resolveSprite(id)
 			val sprite = Minecraft.getInstance().atlasManager.get(SpriteId(PARTICLE_ATLAS, resolved))
 			net.astrorbits.AstrorbitsParticle.logger.debug(
 				"[effect] sprite {} -> {} uv=({}, {})-({}, {})",
 				id, resolved, sprite.u0, sprite.v0, sprite.u1, sprite.v1,
 			)
+			val contents = sprite.contents()
+			val frames = if (contents.isAnimated()) (contents.height() / contents.width()).coerceIn(1, 64) else 1
 			SpriteInfo(
 				layer = SingleQuadParticle.Layer.bySprite(sprite),
 				u0 = sprite.u0,
 				u1 = sprite.u1,
 				v0 = sprite.v0,
 				v1 = sprite.v1,
+				frames = frames,
+				frameV = (sprite.v1 - sprite.v0) / frames,
 			)
 		}.getOrElse {
 			net.astrorbits.AstrorbitsParticle.logger.warn(
 				"[effect] sprite lookup failed for {}: {}", id, it.message,
 			)
-			SpriteInfo(SingleQuadParticle.Layer.TRANSLUCENT, 0f, 0f, 0f, 0f)
+			SpriteInfo(SingleQuadParticle.Layer.TRANSLUCENT, 0f, 0f, 0f, 0f, 1, 0f)
 		}
-	}
 
 	private data class SpriteInfo(
 		val layer: SingleQuadParticle.Layer,
@@ -231,5 +243,7 @@ class EffectParticleGroup(engine: ParticleEngine) : ParticleGroup<Particle>(engi
 		val u1: Float,
 		val v0: Float,
 		val v1: Float,
+		val frames: Int,
+		val frameV: Float,
 	)
 }
