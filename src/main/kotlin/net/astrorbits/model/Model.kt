@@ -25,6 +25,19 @@ enum class Blend {
 	}
 }
 
+/**
+ * 多贴图变体的选择方式：`PARTICLE` 每颗粒子各取一张（与原版 SpriteSet 一致），
+ * `EFFECT` 整个特效按 seed 共用一张。
+ */
+enum class SpriteVariation {
+	PARTICLE, EFFECT;
+
+	companion object {
+		fun parse(raw: String): SpriteVariation =
+			entries.firstOrNull { it.name.equals(raw, ignoreCase = true) } ?: PARTICLE
+	}
+}
+
 /** 子特效触发方式：定义结束，或客户端报告粒子碰撞。 */
 enum class SubEffectTrigger {
 	END, IMPACT;
@@ -56,6 +69,8 @@ data class Physics(
  */
 data class Appearance(
 	val sprite: Identifier = Identifier.withDefaultNamespace("generic_0"),
+	/** 原版粒子定义 id（`particles/<path>.json`）里 `textures` 有多张时，逐粒子还是逐特效选。 */
+	val spriteVariation: SpriteVariation = SpriteVariation.PARTICLE,
 	val size: JsonElement? = null,
 	val sizeJitter: Float = 0.15f,
 	val sizeByAge: JsonElement? = null,
@@ -147,6 +162,7 @@ data class EffectDefinition(
 		private fun parseAppearance(obj: JsonObject): Appearance = Appearance(
 			sprite = Identifier.tryParse(obj.string("sprite", "minecraft:generic_0"))
 				?: Identifier.withDefaultNamespace("generic_0"),
+			spriteVariation = SpriteVariation.parse(obj.string("spriteVariation", "particle")),
 			size = obj.get("size"),
 			sizeJitter = obj.float("sizeJitter", 0.15f),
 			sizeByAge = obj.get("sizeByAge"),

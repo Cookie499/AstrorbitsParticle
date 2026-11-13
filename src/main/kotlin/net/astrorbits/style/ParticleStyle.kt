@@ -14,6 +14,7 @@ import net.astrorbits.model.EffectDefinition
 import net.astrorbits.model.Emission
 import net.astrorbits.model.EmissionMode
 import net.astrorbits.model.Physics
+import net.astrorbits.model.SpriteVariation
 import net.astrorbits.model.float
 import net.astrorbits.model.getOrNull
 import net.astrorbits.model.int
@@ -255,6 +256,7 @@ class BoundEffect(
 
 class BoundAppearance(
 	val sprite: Identifier,
+	val spriteVariation: SpriteVariation,
 	val size: BoundNumber,
 	val sizeJitter: Float,
 	val sizeByAge: FloatCurve,
@@ -295,6 +297,7 @@ object EffectBinder {
 
 	private fun bindAppearance(appearance: Appearance, binder: Binder): BoundAppearance = BoundAppearance(
 		sprite = appearance.sprite,
+		spriteVariation = appearance.spriteVariation,
 		size = binder.bindNumber(appearance.size, 0.2f, "appearance.size"),
 		sizeJitter = appearance.sizeJitter,
 		sizeByAge = binder.curve(appearance.sizeByAge, DEFAULT_SIZE),

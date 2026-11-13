@@ -1,6 +1,9 @@
 package net.astrorbits.client
 
+import net.astrorbits.math.HashRandom
+import net.astrorbits.math.Streams
 import net.astrorbits.model.Blend
+import net.astrorbits.model.SpriteVariation
 import net.minecraft.client.Camera
 import net.minecraft.client.Minecraft
 import net.minecraft.client.multiplayer.ClientLevel
@@ -30,9 +33,14 @@ private const val STRETCH_SEGMENTS = 3
 /**
  * 所有特效共用一个粒子组：组负责推进年龄、做视锥剔除与 LOD，
  * 并把全部粒子写进同一个 QuadParticleRenderState，逐粒子不创建 Particle 对象。
+ *
+ * 动画精灵不做逐帧 UV 偏移：图集自己播动画。TextureAtlas 每 tick 调用
+ * SpriteContents.AnimationState，把当前帧重绘进该 sprite 在贴图集里的那块区域，
+ * 所以四边形只要采样整块 sprite，看到的帧跟着图集走，原版粒子也是这样。
+ * 由此同一张贴图的所有粒子共享一帧，逐粒子起始帧无法用图集实现。
  */
 class EffectParticleGroup(engine: ParticleEngine) : ParticleGroup<Particle>(engine) {
-	private val sprites = HashMap<String, SpriteInfo>()
+	private val variants = HashMap<Identifier, Array<SpriteInfo>>()
 	private var loggedFirstFrame = false
 	private var adaptiveStride = 1
 	private var slowFrames = 0
@@ -78,11 +86,14 @@ class EffectParticleGroup(engine: ParticleEngine) : ParticleGroup<Particle>(engi
 		for (effect in visible) {
 			val buffer = effect.sample(level.gameTime, partialTick)
 			if (buffer.count == 0) continue
-			val sprite = spriteInfo(effect.bound.appearance.sprite, effect.seed)
-			val layer = if (effect.bound.appearance.blend == Blend.ADDITIVE) {
-				AdditiveParticles.layerFor(sprite.layer)
+			val appearance = effect.bound.appearance
+			val sprites = spritesFor(appearance.sprite)
+			val additive = appearance.blend == Blend.ADDITIVE
+			// effect 模式整个特效共用一张，逐粒子模式按 SPRITE 流逐颗取。
+			val sharedSprite = if (appearance.spriteVariation == SpriteVariation.EFFECT || sprites.size == 1) {
+				sprites[effectVariant(effect.seed, sprites.size)]
 			} else {
-				sprite.layer
+				null
 			}
 			val light = lightAt(level, effect)
 			val ox = effect.origin.x.toFloat()
@@ -91,13 +102,13 @@ class EffectParticleGroup(engine: ParticleEngine) : ParticleGroup<Particle>(engi
 			val scale = effect.scale
 			val age = effect.ageAt(level.gameTime, partialTick)
 			val step = maxOf(globalStride, lodStride(effect.origin.distanceToSqr(cameraPos)))
-			val spin = effect.bound.appearance.spin.at(age)
+			val spin = appearance.spin.at(age)
 			val quadRotation = if (spin != 0f) {
 				Quaternionf(rotation).rotateZ(Math.toRadians((spin * age).toDouble()).toFloat())
 			} else {
 				rotation
 			}
-			val stretch = effect.bound.appearance.stretch.at(age)
+			val stretch = appearance.stretch.at(age)
 			val stretchVec = if (stretch > 0f) effect.bound.style.stretchVector(effect.bound, age) else null
 			val svx = stretchVec?.x?.toFloat() ?: 0f
 			val svy = stretchVec?.y?.toFloat() ?: 0f
@@ -106,19 +117,17 @@ class EffectParticleGroup(engine: ParticleEngine) : ParticleGroup<Particle>(engi
 
 			var i = 0
 			while (i < buffer.count) {
+				val sprite = sharedSprite ?: sprites[particleVariant(effect.seed, i, sprites.size)]
+				val layer = if (additive) AdditiveParticles.layerFor(sprite.layer) else sprite.layer
 				val px = (ox + (buffer.x[i] - ox) * scale - cameraPos.x).toFloat()
 				val py = (oy + (buffer.y[i] - oy) * scale - cameraPos.y).toFloat()
 				val pz = (oz + (buffer.z[i] - oz) * scale - cameraPos.z).toFloat()
 				val size = buffer.size[i] * scale
 				val color = buffer.argb[i]
-				val frame = if (sprite.frames > 1) {
-					((effect.seed ushr 8) + i + level.gameTime / 2).mod(sprite.frames.toLong()).toInt()
-				} else 0
-				val fv0 = sprite.v0 + sprite.frameV * frame
 				state.add(
 					layer, px, py, pz,
 					quadRotation.x, quadRotation.y, quadRotation.z, quadRotation.w,
-					size, sprite.u0, sprite.u1, fv0, fv0 + sprite.frameV, color, light,
+					size, sprite.u0, sprite.u1, sprite.v0, sprite.v1, color, light,
 				)
 				if (stretched) {
 					for (segment in 1 until STRETCH_SEGMENTS) {
@@ -193,7 +202,14 @@ class EffectParticleGroup(engine: ParticleEngine) : ParticleGroup<Particle>(engi
 		return (raw shl 4) or (raw shl 20)
 	}
 
-	/** 允许直接写原版粒子定义 id（如 end_rod），取它 textures 数组里的第一张贴图。 */
+	/** 整个特效共用一张时按 seed 取，与应用顺序无关。 */
+	private fun effectVariant(seed: Long, count: Int): Int = ((seed ushr 1) % count).toInt()
+
+	/** 逐粒子取变体，用 SPRITE 流，保证同一 (seed, index) 每次得到同一张。 */
+	private fun particleVariant(seed: Long, index: Int, count: Int): Int =
+		((HashRandom.hash(seed, Streams.SPRITE, index) ushr 1) % count).toInt()
+
+	/** 允许直接写原版粒子定义 id（如 end_rod），展开它 textures 数组里的全部贴图。 */
 	private fun resolveTextures(id: Identifier): List<Identifier> {
 		val jsonId = Identifier.fromNamespaceAndPath(id.namespace, "particles/${id.path}.json")
 		val resource = Minecraft.getInstance().resourceManager.getResource(jsonId).orElse(null) ?: return listOf(id)
@@ -206,35 +222,42 @@ class EffectParticleGroup(engine: ParticleEngine) : ParticleGroup<Particle>(engi
 		}.getOrDefault(listOf(id))
 	}
 
-	private fun spriteInfo(id: Identifier, seed: Long): SpriteInfo {
-		val variants = resolveTextures(id)
-		val variant = if (variants.size <= 1) 0 else ((seed ushr 1) % variants.size).toInt()
-		return sprites.getOrPut("$id#$variant") { loadSprite(id, variants[variant]) }
+	private fun spritesFor(id: Identifier): Array<SpriteInfo> = variants.getOrPut(id) {
+		val textures = resolveTextures(id)
+		net.astrorbits.AstrorbitsParticle.logger.debug(
+			"[effect] sprite {} has {} variant(s): {}",
+			id, textures.size, textures.joinToString(","),
+		)
+		Array(textures.size) { loadSprite(id, textures[it]) }
 	}
 
 	private fun loadSprite(id: Identifier, resolved: Identifier): SpriteInfo =
 		runCatching {
 			val sprite = Minecraft.getInstance().atlasManager.get(SpriteId(PARTICLE_ATLAS, resolved))
-			net.astrorbits.AstrorbitsParticle.logger.debug(
-				"[effect] sprite {} -> {} uv=({}, {})-({}, {})",
-				id, resolved, sprite.u0, sprite.v0, sprite.u1, sprite.v1,
-			)
 			val contents = sprite.contents()
-			val frames = if (contents.isAnimated()) (contents.height() / contents.width()).coerceIn(1, 64) else 1
+			if (contents.isAnimated) {
+				net.astrorbits.AstrorbitsParticle.logger.info(
+					"[effect] sprite {} -> {} is animated, {} frames played by the atlas",
+					id, resolved, contents.uniqueFrames.size,
+				)
+			} else {
+				net.astrorbits.AstrorbitsParticle.logger.debug(
+					"[effect] sprite {} -> static uv=({}, {})-({}, {})",
+					id, resolved, sprite.u0, sprite.v0, sprite.u1, sprite.v1,
+				)
+			}
 			SpriteInfo(
 				layer = SingleQuadParticle.Layer.bySprite(sprite),
 				u0 = sprite.u0,
 				u1 = sprite.u1,
 				v0 = sprite.v0,
 				v1 = sprite.v1,
-				frames = frames,
-				frameV = (sprite.v1 - sprite.v0) / frames,
 			)
 		}.getOrElse {
 			net.astrorbits.AstrorbitsParticle.logger.warn(
-				"[effect] sprite lookup failed for {}: {}", id, it.message,
+				"[effect] sprite lookup failed for {}: {}", resolved, it.message,
 			)
-			SpriteInfo(SingleQuadParticle.Layer.TRANSLUCENT, 0f, 0f, 0f, 0f, 1, 0f)
+			SpriteInfo(SingleQuadParticle.Layer.TRANSLUCENT, 0f, 0f, 0f, 0f)
 		}
 
 	private data class SpriteInfo(
@@ -243,7 +266,5 @@ class EffectParticleGroup(engine: ParticleEngine) : ParticleGroup<Particle>(engi
 		val u1: Float,
 		val v0: Float,
 		val v1: Float,
-		val frames: Int,
-		val frameV: Float,
 	)
 }
