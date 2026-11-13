@@ -129,6 +129,12 @@ object ServerEffects {
 			boundsRadius = bound.radius * scale,
 		)
 		effects[id] = effect
+		// 频谱扫描每 10 tick 一次，新建特效要立刻下发，否则会跳过开头
+		for (player in level.server.playerList.players) {
+			if (!isEligible(player, effect, false)) continue
+			sendStart(player, effect, 0L)
+			effect.subscribers += player.uuid
+		}
 		AstrorbitsParticle.logger.info(
 			"[effect] spawned {} id={} depth={} scene={} origin={}",
 			definition.style, id, depth, scene?.id ?: "-", origin,
