@@ -83,12 +83,15 @@ class ClientEffect(
 
 	private fun sampleInto(out: ParticleBuffer, age: Float) {
 		out.reset(bound.count)
+		val scale = bound.definition.timeScale * if (bound.definition.reverse) -1f else 1f
+		val scaled = age * scale
 		val sampleAge = when {
-			// 反向循环先按周期回绕，否则 age 超过 duration 后一直停在起始帧
-			bound.definition.reverse && bound.definition.loop ->
-				bound.duration - (age % bound.duration)
-			bound.definition.reverse -> (bound.duration - age).coerceAtLeast(0f)
-			else -> age
+			bound.definition.loop -> {
+				val wrapped = scaled % bound.duration
+				if (wrapped < 0f) wrapped + bound.duration else wrapped
+			}
+			scale < 0f -> (bound.duration + scaled).coerceIn(0f, bound.duration)
+			else -> scaled
 		}
 		bound.style.sample(bound, origin, seed, sampleAge, out)
 	}

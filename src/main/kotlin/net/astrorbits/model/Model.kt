@@ -80,6 +80,7 @@ data class EffectDefinition(
 	val duration: Float,
 	val loop: Boolean,
 	val reverse: Boolean,
+	val timeScale: Float,
 	val subEffect: Identifier?,
 	val subEffectTrigger: SubEffectTrigger,
 	val emission: Emission,
@@ -105,6 +106,7 @@ data class EffectDefinition(
 			val duration = obj.float("duration", 4f).coerceIn(0.05f, MAX_DURATION)
 			val loop = obj.bool("loop", false)
 			val reverse = obj.bool("reverse", false)
+			val timeScale = obj.float("timeScale", 1f).coerceIn(-8f, 8f)
 			val subEffect = obj.get("subEffect")?.takeIf { it.isJsonPrimitive }?.asString
 				?.takeIf { it.isNotEmpty() }?.let { Identifier.tryParse(it) }
 			val subEffectTrigger = SubEffectTrigger.parse(obj.string("subEffectTrigger", "end"))
@@ -117,7 +119,7 @@ data class EffectDefinition(
 			val params = obj.objectOrNull("params") ?: JsonObject()
 
 			EffectDefinition(
-				style, duration, loop, reverse, subEffect, subEffectTrigger,
+				style, duration, loop, reverse, timeScale, subEffect, subEffectTrigger,
 				emission, physics, appearance, visibility, params, json,
 			)
 		}
