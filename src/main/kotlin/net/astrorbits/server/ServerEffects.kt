@@ -8,6 +8,7 @@ import net.astrorbits.net.EffectImpactPayload
 import net.astrorbits.net.EffectStartPayload
 import net.astrorbits.net.EffectStopPayload
 import net.astrorbits.net.ModPayloads
+import net.astrorbits.style.BoundEffect
 import net.astrorbits.style.EffectBinder
 import net.astrorbits.style.ParticleStyles
 import com.google.gson.JsonArray
@@ -75,6 +76,7 @@ object ServerEffects {
 	private var server: MinecraftServer? = null
 	private val effects = LinkedHashMap<Long, ServerEffect>()
 	private val definitions = LinkedHashMap<Identifier, EffectDefinition>()
+	private val boundCache = LinkedHashMap<Int, BoundEffect>()
 	private val sentDefinitions = HashMap<UUID, MutableSet<Int>>()
 	private var scenes: List<Scene> = emptyList()
 	private var nextId = 1L
@@ -105,11 +107,17 @@ object ServerEffects {
 		seed: Long? = null,
 		depth: Int = 0,
 	): ServerEffect? {
-		val bound = EffectBinder.bind(definition).getOrElse {
-			AstrorbitsParticle.logger.warn(
-				"[effect] rejected definition {}: {}", definition.style, it.message,
-			)
-			return null
+		val hash = definition.source.hashCode()
+		val bound = boundCache.getOrPut(hash) {
+			EffectBinder.bind(definition).getOrElse {
+				AstrorbitsParticle.logger.warn(
+					"[effect] rejected definition {}: {}", definition.style, it.message,
+				)
+				return null
+			}
+		}
+		while (boundCache.size > 64) {
+			boundCache.remove(boundCache.keys.first())
 		}
 		val id = nextId++
 		val scene = findScene(level, origin)
