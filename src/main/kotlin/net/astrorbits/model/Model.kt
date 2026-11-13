@@ -27,10 +27,10 @@ enum class Blend {
 
 /**
  * 多贴图变体的选择方式：`PARTICLE` 每颗粒子各取一张（与原版 SpriteSet 一致），
- * `EFFECT` 整个特效按 seed 共用一张。
+ * `EFFECT` 整个特效按 seed 共用一张，`CYCLE` 按游戏时间在变体间轮换。
  */
 enum class SpriteVariation {
-	PARTICLE, EFFECT;
+	PARTICLE, EFFECT, CYCLE;
 
 	companion object {
 		fun parse(raw: String): SpriteVariation =

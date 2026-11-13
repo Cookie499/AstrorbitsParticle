@@ -90,8 +90,14 @@ class EffectParticleGroup(engine: ParticleEngine) : ParticleGroup<Particle>(engi
 			val sprites = spritesFor(appearance.sprite)
 			val additive = appearance.blend == Blend.ADDITIVE
 			// effect 模式整个特效共用一张，逐粒子模式按 SPRITE 流逐颗取。
-			val sharedSprite = if (appearance.spriteVariation == SpriteVariation.EFFECT || sprites.size == 1) {
+			val sharedSprite = if (sprites.size == 1) {
+				sprites[0]
+			} else if (appearance.spriteVariation == SpriteVariation.EFFECT) {
 				sprites[effectVariant(effect.seed, sprites.size)]
+			} else if (appearance.spriteVariation == SpriteVariation.CYCLE) {
+				val frame = (level.gameTime / 2 + effectVariant(effect.seed, sprites.size))
+					.mod(sprites.size.toLong()).toInt()
+				sprites[frame]
 			} else {
 				null
 			}
