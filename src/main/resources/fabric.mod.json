@@ -3,13 +3,13 @@
 	"id": "astrorbitsparticle",
 	"version": "${version}",
 	"name": "AstrorbitsParticle",
-	"description": "This is an example description! Tell everyone what your mod is about!",
+	"description": "make it splash!",
 	"authors": [
-		"Me!"
+		"Cookie_qwq"
 	],
 	"contact": {
-		"homepage": "https://fabricmc.net/",
-		"sources": "https://github.com/FabricMC/fabric-example-mod"
+		"homepage": "https://github.com/NMB-Court-Team/AstrorbitsParticle",
+		"sources": "https://github.com/NMB-Court-Team/AstrorbitsParticle"
 	},
 	"license": "GPL-3.0",
 	"icon": "assets/astrorbitsparticle/icon.png",
@@ -26,21 +26,8 @@
 				"value": "net.astrorbits.client.AstrorbitsParticleClient",
 				"adapter": "kotlin"
 			}
-		],
-		"fabric-datagen": [
-			{
-				"value": "net.astrorbits.client.AstrorbitsParticleDataGenerator",
-				"adapter": "kotlin"
-			}
 		]
 	},
-	"mixins": [
-		"astrorbitsparticle.mixins.json",
-		{
-			"config": "astrorbitsparticle.client.mixins.json",
-			"environment": "client"
-		}
-	],
 	"depends": {
 		"fabricloader": ">=0.19.5",
 		"minecraft": "~26.2",

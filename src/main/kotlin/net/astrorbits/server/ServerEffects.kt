@@ -187,6 +187,7 @@ object ServerEffects {
 	fun findDefinition(id: Identifier): EffectDefinition? = definitions[id]
 
 	fun reload() {
+		net.astrorbits.config.ModConfig.load()
 		loadConfig()
 		stopAll()
 		server?.playerList?.players?.forEach { ServerPlayNetworking.send(it, EffectClearPayload()) }
