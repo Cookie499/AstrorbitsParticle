@@ -25,12 +25,18 @@ object AdditiveParticles {
 
 	private var assigned = false
 
+	/**
+	 * 客户端初始化时 Iris 可能还没建立程序表，过早登记会被丢弃。
+	 * 每次提取时检查一次，等光影真正启用后再登记。
+	 */
 	fun registerIris() {
 		if (assigned || !FabricLoader.getInstance().isModLoaded("iris")) return
 		runCatching {
 			val apiClass = Class.forName("net.irisshaders.iris.api.v0.IrisApi")
 			val programClass = Class.forName("net.irisshaders.iris.api.v0.IrisProgram")
 			val api = apiClass.getMethod("getInstance").invoke(null)
+			val inUse = apiClass.getMethod("isShaderPackInUse").invoke(api) as Boolean
+			if (!inUse) return
 			val program = programClass.getField("PARTICLES_TRANSLUCENT").get(null)
 			apiClass.getMethod("assignPipeline", RenderPipeline::class.java, programClass)
 				.invoke(api, pipeline, program)
