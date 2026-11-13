@@ -79,11 +79,8 @@ class EffectParticleGroup(engine: ParticleEngine) : ParticleGroup<Particle>(engi
 			val buffer = effect.sample()
 			if (buffer.count == 0) continue
 			val sprite = spriteInfo(effect.bound.appearance.sprite)
-			val layer = if (effect.bound.appearance.blend == Blend.ADDITIVE) {
-				AdditiveParticles.layerFor(sprite.layer)
-			} else {
-				sprite.layer
-			}
+			// 自定义 additive 管线在 26.2 下纹理绑定不生效，先统一用原版粒子层
+			val layer = sprite.layer
 			val light = lightAt(level, effect)
 			val ox = effect.origin.x.toFloat()
 			val oy = effect.origin.y.toFloat()
