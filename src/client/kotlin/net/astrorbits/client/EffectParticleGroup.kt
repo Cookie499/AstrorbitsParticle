@@ -1,9 +1,6 @@
 package net.astrorbits.client
 
 import net.astrorbits.model.Blend
-import com.mojang.blaze3d.pipeline.BlendFunction
-import com.mojang.blaze3d.pipeline.ColorTargetState
-import com.mojang.blaze3d.pipeline.RenderPipeline
 import net.minecraft.client.Camera
 import net.minecraft.client.Minecraft
 import net.minecraft.client.multiplayer.ClientLevel
@@ -36,13 +33,6 @@ private const val STRETCH_SEGMENTS = 3
  */
 class EffectParticleGroup(engine: ParticleEngine) : ParticleGroup<Particle>(engine) {
 	private val sprites = HashMap<Identifier, SpriteInfo>()
-	private val additiveLayer: SingleQuadParticle.Layer by lazy {
-		val pipeline = RenderPipeline.builder(net.minecraft.client.renderer.RenderPipelines.PARTICLE_SNIPPET)
-			.withLocation(Identifier.fromNamespaceAndPath("astrorbitsparticle", "pipeline/additive_particle"))
-			.withColorTargetState(ColorTargetState(BlendFunction.ADDITIVE))
-			.build()
-		SingleQuadParticle.Layer(true, PARTICLE_ATLAS, pipeline)
-	}
 	private var loggedFirstFrame = false
 	private var adaptiveStride = 1
 	private var slowFrames = 0
@@ -65,6 +55,7 @@ class EffectParticleGroup(engine: ParticleEngine) : ParticleGroup<Particle>(engi
 	override fun size(): Int = ClientEffects.count()
 
 	override fun extractRenderState(frustum: Frustum, camera: Camera, partialTick: Float): ParticleGroupRenderState {
+		AdditiveParticles.registerIris()
 		val state = QuadParticleRenderState()
 		val level = Minecraft.getInstance().level ?: return state
 		val cameraPos = camera.position()
@@ -89,7 +80,7 @@ class EffectParticleGroup(engine: ParticleEngine) : ParticleGroup<Particle>(engi
 			if (buffer.count == 0) continue
 			val sprite = spriteInfo(effect.bound.appearance.sprite)
 			val layer = if (effect.bound.appearance.blend == Blend.ADDITIVE) {
-				additiveLayer
+				AdditiveParticles.layer
 			} else {
 				sprite.layer
 			}
