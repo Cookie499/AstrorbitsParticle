@@ -46,6 +46,7 @@ class EffectParticleGroup(engine: ParticleEngine) : ParticleGroup<Particle>(engi
 	private var adaptiveStride = 1
 	private var slowFrames = 0
 	private var fastFrames = 0
+	private var quadKeys = LongArray(0)
 
 	override fun add(particle: Particle): Boolean {
 		if (particle is EffectAnchorParticle) {
@@ -64,7 +65,7 @@ class EffectParticleGroup(engine: ParticleEngine) : ParticleGroup<Particle>(engi
 	override fun size(): Int = ClientEffects.count()
 
 	override fun extractRenderState(frustum: Frustum, camera: Camera, partialTick: Float): ParticleGroupRenderState {
-		AdditiveParticles.registerIris()
+		ParticlePipelines.registerIris()
 		val state = QuadParticleRenderState()
 		val level = Minecraft.getInstance().level ?: return state
 		val cameraPos = camera.position()
@@ -84,7 +85,8 @@ class EffectParticleGroup(engine: ParticleEngine) : ParticleGroup<Particle>(engi
 		val globalStride = maxOf(adaptiveStride, budgetStride)
 
 		var quads = 0
-		for (effect in visible) {
+		// 关闭深度写入后混合结果依赖提交顺序，先画远的特效。
+		for (effect in visible.asReversed()) {
 			val buffer = effect.sample(level.gameTime, partialTick)
 			if (buffer.count == 0) continue
 			val appearance = effect.bound.appearance
@@ -128,42 +130,71 @@ class EffectParticleGroup(engine: ParticleEngine) : ParticleGroup<Particle>(engi
 			val stretched = stretchVec != null && svx * svx + svy * svy + svz * svz > 1e-6f
 
 			var i = 0
+			val quadCount = ((buffer.count + step - 1) / step) *
+				if (stretched) STRETCH_SEGMENTS else 1
+			ensureQuadKeys(quadCount)
+			var quad = 0
 			while (i < buffer.count) {
-				val sprite = sharedSprite ?: sprites[particleVariant(effect.seed, i, sprites.size)]
-				val layer = if (additive) {
-					AdditiveParticles.layerFor(sprite.layer)
-				} else if (sprite.layer.translucent) {
-					sprite.layer
-				} else {
-					AdditiveParticles.translucentLayer
-				}
 				val px = (ox + (buffer.x[i] - ox) * scale - cameraPos.x).toFloat()
 				val py = (oy + (buffer.y[i] - oy) * scale - cameraPos.y).toFloat()
 				val pz = (oz + (buffer.z[i] - oz) * scale - cameraPos.z).toFloat()
-				val size = buffer.size[i] * scale
-				val color = buffer.argb[i]
-				state.add(
-					layer, px, py, pz,
-					quadRotation.x, quadRotation.y, quadRotation.z, quadRotation.w,
-					size, sprite.u0, sprite.u1, sprite.v0, sprite.v1, color, light,
-				)
+				quadKeys[quad++] = quadKey(px, py, pz, i, 0)
 				if (stretched) {
 					for (segment in 1 until STRETCH_SEGMENTS) {
 						val f = segment.toFloat() / STRETCH_SEGMENTS
-						state.add(
-							layer,
+						quadKeys[quad++] = quadKey(
 							px - svx * stretch * f,
 							py - svy * stretch * f,
 							pz - svz * stretch * f,
-							quadRotation.x, quadRotation.y, quadRotation.z, quadRotation.w,
-							size * (1f - f * 0.4f),
-							sprite.u0, sprite.u1, sprite.v0, sprite.v1,
-							fadeAlpha(color, 1f - f * 0.6f),
-							light,
+							i, segment,
 						)
 					}
 				}
 				i += step
+			}
+
+			if (!additive) {
+				// alpha 混合从远到近提交；additive 与顺序无关。
+				java.util.Arrays.sort(quadKeys, 0, quadCount)
+			}
+			var slot = 0
+			while (slot < quadCount) {
+				val key = quadKeys[if (!additive) quadCount - 1 - slot else slot]
+				val packed = key.toInt()
+				val index = packed ushr 2
+				val segment = packed and 0x3
+				val sprite = sharedSprite ?: sprites[particleVariant(effect.seed, index, sprites.size)]
+				val layer = if (additive) {
+					ParticlePipelines.layerFor(sprite.layer)
+				} else {
+					ParticlePipelines.translucentLayer()
+				}
+				val px = (ox + (buffer.x[index] - ox) * scale - cameraPos.x).toFloat()
+				val py = (oy + (buffer.y[index] - oy) * scale - cameraPos.y).toFloat()
+				val pz = (oz + (buffer.z[index] - oz) * scale - cameraPos.z).toFloat()
+				val size = buffer.size[index] * scale
+				val color = buffer.argb[index]
+				if (segment == 0) {
+					state.add(
+						layer, px, py, pz,
+						quadRotation.x, quadRotation.y, quadRotation.z, quadRotation.w,
+						size, sprite.u0, sprite.u1, sprite.v0, sprite.v1, color, light,
+					)
+				} else {
+					val f = segment.toFloat() / STRETCH_SEGMENTS
+					state.add(
+						layer,
+						px - svx * stretch * f,
+						py - svy * stretch * f,
+						pz - svz * stretch * f,
+						quadRotation.x, quadRotation.y, quadRotation.z, quadRotation.w,
+						size * (1f - f * 0.4f),
+						sprite.u0, sprite.u1, sprite.v0, sprite.v1,
+						fadeAlpha(color, 1f - f * 0.6f),
+						light,
+					)
+				}
+				slot++
 			}
 			quads += (buffer.count + step - 1) / step
 		}
@@ -177,6 +208,18 @@ class EffectParticleGroup(engine: ParticleEngine) : ParticleGroup<Particle>(engi
 			)
 		}
 		return state
+	}
+
+	private fun ensureQuadKeys(size: Int) {
+		if (quadKeys.size < size) quadKeys = LongArray(maxOf(size, quadKeys.size * 2))
+	}
+
+	/** 高 32 位是相机距离的 float 位模式（正数可直接比较），低 32 位是粒子索引与拉伸段号。 */
+	private fun quadKey(px: Float, py: Float, pz: Float, index: Int, segment: Int): Long {
+		val distanceSqr = px * px + py * py + pz * pz
+		val bits = java.lang.Float.floatToIntBits(distanceSqr)
+		val packed = (index shl 2) or segment
+		return (bits.toLong() shl 32) or (packed.toLong() and 0xFFFFFFFFL)
 	}
 
 	private fun lodStride(distanceSqr: Double): Int {

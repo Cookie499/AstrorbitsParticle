@@ -2,7 +2,9 @@ package net.astrorbits.client
 
 import com.mojang.blaze3d.pipeline.BlendFunction
 import com.mojang.blaze3d.pipeline.ColorTargetState
+import com.mojang.blaze3d.pipeline.DepthStencilState
 import com.mojang.blaze3d.pipeline.RenderPipeline
+import com.mojang.blaze3d.platform.CompareOp
 import net.astrorbits.AstrorbitsParticle
 import net.fabricmc.loader.api.FabricLoader
 import net.minecraft.client.particle.SingleQuadParticle
@@ -10,10 +12,11 @@ import net.minecraft.client.renderer.RenderPipelines
 import net.minecraft.resources.Identifier
 
 /**
- * additive 混合使用独立管线。Iris 只认识自己映射过的管线，
- * 未登记的管线在光影下不绘制，所以启动时通过反射调用 Iris API 登记。
+ * 粒子的两条自建管线。原版半透明粒子管线写深度，重叠的半透明四边形会互相遮挡，
+ * 在密集特效上表现为深度闪烁；这里复制一份只把深度写入关掉，仍做深度测试。
+ * Iris 只认识自己映射过的管线，未登记的管线在光影下不绘制，所以启用光影时通过反射登记。
  */
-object AdditiveParticles {
+object ParticlePipelines {
 	private val particleAtlas = Identifier.withDefaultNamespace("textures/atlas/particles.png")
 
 	private val pipeline: RenderPipeline = RenderPipeline.builder(RenderPipelines.PARTICLE_SNIPPET)
@@ -21,11 +24,21 @@ object AdditiveParticles {
 		.withColorTargetState(ColorTargetState(BlendFunction.ADDITIVE))
 		.build()
 
+	private val translucentPipeline: RenderPipeline = RenderPipeline.builder(RenderPipelines.PARTICLE_SNIPPET)
+		.withLocation(Identifier.fromNamespaceAndPath("astrorbitsparticle", "pipeline/translucent_particle"))
+		.withColorTargetState(ColorTargetState(BlendFunction.TRANSLUCENT))
+		.withDepthStencilState(DepthStencilState(CompareOp.GREATER_THAN_OR_EQUAL, false))
+		.build()
+
 	val layer: SingleQuadParticle.Layer = SingleQuadParticle.Layer(true, particleAtlas, pipeline)
 
-	/** alpha 混合强制走半透明层，避免精灵本身被判为不透明时忽略顶点 alpha。 */
-	val translucentLayer: SingleQuadParticle.Layer =
-		SingleQuadParticle.Layer(true, particleAtlas, RenderPipelines.TRANSLUCENT_PARTICLE)
+	/** alpha 混合使用自建半透明层：关闭深度写入，避免重叠四边形按深度互相裁掉。 */
+	private val customTranslucentLayer: SingleQuadParticle.Layer =
+		SingleQuadParticle.Layer(true, particleAtlas, translucentPipeline)
+
+	/** alpha 混合的粒子层；光影启用时退回原版层，保证 Iris 能绑定贴图。 */
+	fun translucentLayer(): SingleQuadParticle.Layer =
+		if (shaderPackActive) SingleQuadParticle.Layer.TRANSLUCENT else customTranslucentLayer
 
 	private var assigned = false
 	private var shaderPackActive = false
@@ -48,12 +61,13 @@ object AdditiveParticles {
 			shaderPackActive = inUse
 			if (!inUse) return
 			val program = programClass.getField("PARTICLES_TRANSLUCENT").get(null)
-			apiClass.getMethod("assignPipeline", RenderPipeline::class.java, programClass)
-				.invoke(api, pipeline, program)
+			val assign = apiClass.getMethod("assignPipeline", RenderPipeline::class.java, programClass)
+			assign.invoke(api, pipeline, program)
+			assign.invoke(api, translucentPipeline, program)
 			assigned = true
-			AstrorbitsParticle.logger.info("[effect] assigned additive pipeline to Iris")
+			AstrorbitsParticle.logger.info("[effect] assigned particle pipelines to Iris")
 		}.onFailure {
-			AstrorbitsParticle.logger.warn("[effect] failed to assign additive pipeline to Iris: {}", it.message)
+			AstrorbitsParticle.logger.warn("[effect] failed to assign particle pipelines to Iris: {}", it.message)
 		}
 	}
 }

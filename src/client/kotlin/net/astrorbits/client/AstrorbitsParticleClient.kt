@@ -16,7 +16,7 @@ object AstrorbitsParticleClient : ClientModInitializer {
 			EffectAnchorParticle.create(options, level, x, y, z)
 		}
 		ParticleGroupRegistry.register(EFFECT_RENDER_TYPE) { engine -> EffectParticleGroup(engine) }
-		AdditiveParticles.registerIris()
+		ParticlePipelines.registerIris()
 
 		ClientPlayNetworking.registerGlobalReceiver(EffectHandshakePayload.TYPE) { payload, context ->
 			context.client().execute { ClientEffects.handshake(payload) }
