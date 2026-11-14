@@ -229,6 +229,11 @@ class BoundEffect(
 	val styleParams: BoundStyle,
 ) {
 	/** 采样各年龄的粒子位置，取最大距离外扩 1 格，避免飞得远的样式被提前剔除。 */
+	fun withLifetime(lifetime: Float): BoundEffect = BoundEffect(
+		definition, style, count, duration, emission.copy(lifetime = lifetime),
+		appearance, physics, styleParams,
+	)
+
 	val radius: Float = boundsRadius()
 
 	private fun boundsRadius(): Float {

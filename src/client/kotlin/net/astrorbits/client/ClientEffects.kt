@@ -2,6 +2,7 @@ package net.astrorbits.client
 
 import net.astrorbits.AstrorbitsParticle
 import net.astrorbits.model.EffectDefinition
+import net.astrorbits.model.SpriteVariation
 import net.astrorbits.model.SubEffectTrigger
 import net.astrorbits.net.EffectClearPayload
 import net.astrorbits.net.EffectHandshakePayload
@@ -144,12 +145,13 @@ object ClientEffects {
 		}
 		val definition = resolveDefinition(payload) ?: return
 		val bound = boundCache.getOrPut(payload.definitionHash) {
-			EffectBinder.bind(definition).getOrElse {
+			val raw = EffectBinder.bind(definition).getOrElse {
 				AstrorbitsParticle.logger.warn(
 					"[effect] client rejected definition {}: {}", definition.style, it.message,
 				)
 				return
 			}
+			adjustLifetime(raw)
 		}
 		val baseAge = payload.elapsedTicks / 20f
 		active[payload.effectId] = ClientEffect(
@@ -165,6 +167,16 @@ object ClientEffects {
 			"[effect] client start id={} style={} particles={}",
 			payload.effectId, definition.style, bound.count,
 		)
+	}
+
+	/** cycle 变体按贴图数量收紧寿命，让一轮换图结束即消失，颜色渐变也随之对齐。 */
+	private fun adjustLifetime(bound: BoundEffect): BoundEffect {
+		if (bound.appearance.spriteVariation != SpriteVariation.CYCLE) return bound
+		val frames = SpriteVariants.count(bound.appearance.sprite)
+		if (frames <= 1) return bound
+		val lifetime = (frames * bound.appearance.spriteCycleTicks / 20f)
+			.coerceAtMost(bound.duration)
+		return if (lifetime < bound.emission.lifetime) bound.withLifetime(lifetime) else bound
 	}
 
 	fun stop(payload: EffectStopPayload) {
