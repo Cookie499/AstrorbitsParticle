@@ -15,6 +15,7 @@ import net.minecraft.client.particle.SingleQuadParticle
 import net.minecraft.client.renderer.culling.Frustum
 import net.minecraft.client.renderer.state.level.ParticleGroupRenderState
 import net.minecraft.client.renderer.state.level.QuadParticleRenderState
+import net.minecraft.client.renderer.texture.TextureAtlasSprite
 import net.minecraft.client.resources.model.sprite.SpriteId
 import net.minecraft.core.BlockPos
 import net.minecraft.resources.Identifier
@@ -88,6 +89,11 @@ class EffectParticleGroup(engine: ParticleEngine) : ParticleGroup<Particle>(engi
 			if (buffer.count == 0) continue
 			val appearance = effect.bound.appearance
 			val sprites = spritesFor(appearance.sprite)
+			// 整个特效可见就标记它的全部变体，避免逐粒子去重；Sodium 只要求本帧有引用。
+			for (info in sprites) {
+				val atlasSprite = info.atlasSprite ?: continue
+				SodiumSpriteActivity.mark(atlasSprite)
+			}
 			val additive = appearance.blend == Blend.ADDITIVE
 			// effect 模式整个特效共用一张，逐粒子模式按 SPRITE 流逐颗取。
 			val sharedSprite = if (sprites.size == 1) {
@@ -258,12 +264,13 @@ class EffectParticleGroup(engine: ParticleEngine) : ParticleGroup<Particle>(engi
 				u1 = sprite.u1,
 				v0 = sprite.v0,
 				v1 = sprite.v1,
+				atlasSprite = if (contents.isAnimated) sprite else null,
 			)
 		}.getOrElse {
 			net.astrorbits.AstrorbitsParticle.logger.warn(
 				"[effect] sprite lookup failed for {}: {}", resolved, it.message,
 			)
-			SpriteInfo(SingleQuadParticle.Layer.TRANSLUCENT, 0f, 0f, 0f, 0f)
+			SpriteInfo(SingleQuadParticle.Layer.TRANSLUCENT, 0f, 0f, 0f, 0f, null)
 		}
 
 	private data class SpriteInfo(
@@ -272,5 +279,7 @@ class EffectParticleGroup(engine: ParticleEngine) : ParticleGroup<Particle>(engi
 		val u1: Float,
 		val v0: Float,
 		val v1: Float,
+		/** 动画 sprite 才交给 Sodium 标记；静态 sprite 不需要。 */
+		val atlasSprite: TextureAtlasSprite?,
 	)
 }
