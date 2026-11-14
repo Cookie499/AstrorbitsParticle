@@ -81,6 +81,7 @@ val COMMON_SCHEMA: StyleSchema = StyleSchema(
 	params = listOf(
 		numSpec("duration", 4f, "特效总时长（秒），循环播放时为一个周期", "0.05..3600", 0.05f, 3600f),
 		boolSpec("loop", false, "是否循环播放：每个周期重新发射，粒子按寿命自然结束"),
+		textSpec("orientation", "world", "特效朝向：world 固定世界坐标；view 把局部 +Z 对齐触发时的视线方向"),
 		boolSpec("reverse", false, "反向播放：按 duration - age 采样；与 loop 同时启用时先按 duration 取模"),
 		textSpec("subEffect", "", "子特效定义 id，不写则不生成"),
 		textSpec("subEffectTrigger", "end", "子特效触发方式：end 本体结束、impact 客户端粒子碰撞"),

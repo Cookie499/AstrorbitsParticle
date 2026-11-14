@@ -9,7 +9,7 @@ import net.minecraft.network.codec.StreamEncoder
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload
 
 /** 协议版本；改动包结构时递增，客户端在连接建立时与服务端比对。 */
-const val PROTOCOL_VERSION = 3
+const val PROTOCOL_VERSION = 4
 
 /** 随机算法版本；改动 [net.astrorbits.math.HashRandom] 或流的取用顺序时递增。 */
 const val RNG_VERSION = 1
@@ -44,6 +44,9 @@ class EffectStartPayload(
 	val y: Float,
 	val z: Float,
 	val scale: Float,
+	/** `orientation=view` 的朝向，度；未朝向视图时为 0。 */
+	val viewYaw: Float,
+	val viewPitch: Float,
 	val definitionHash: Int,
 	/** 客户端已有该 hash 的定义时为 null。 */
 	val definition: String?,
@@ -62,6 +65,8 @@ class EffectStartPayload(
 				buf.writeFloat(payload.y)
 				buf.writeFloat(payload.z)
 				buf.writeFloat(payload.scale)
+				buf.writeFloat(payload.viewYaw)
+				buf.writeFloat(payload.viewPitch)
 				buf.writeInt(payload.definitionHash)
 				buf.writeBoolean(payload.definition != null)
 				if (payload.definition != null) buf.writeUtf(payload.definition)
@@ -75,6 +80,8 @@ class EffectStartPayload(
 					y = buf.readFloat(),
 					z = buf.readFloat(),
 					scale = buf.readFloat(),
+					viewYaw = buf.readFloat(),
+					viewPitch = buf.readFloat(),
 					definitionHash = buf.readInt(),
 					definition = if (buf.readBoolean()) buf.readUtf() else null,
 				)

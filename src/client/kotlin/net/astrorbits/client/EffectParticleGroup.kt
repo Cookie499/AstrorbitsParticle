@@ -123,7 +123,7 @@ class EffectParticleGroup(engine: ParticleEngine) : ParticleGroup<Particle>(engi
 				rotation
 			}
 			val stretch = appearance.stretch.at(age)
-			val stretchVec = if (stretch > 0f) effect.bound.style.stretchVector(effect.bound, age) else null
+			val stretchVec = if (stretch > 0f) effect.stretchVector(age) else null
 			val svx = stretchVec?.x?.toFloat() ?: 0f
 			val svy = stretchVec?.y?.toFloat() ?: 0f
 			val svz = stretchVec?.z?.toFloat() ?: 0f

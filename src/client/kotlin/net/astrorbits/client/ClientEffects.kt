@@ -2,6 +2,7 @@ package net.astrorbits.client
 
 import net.astrorbits.AstrorbitsParticle
 import net.astrorbits.model.EffectDefinition
+import net.astrorbits.model.Orientation
 import net.astrorbits.model.SpriteVariation
 import net.astrorbits.model.SubEffectTrigger
 import net.astrorbits.net.EffectClearPayload
@@ -24,7 +25,9 @@ import net.minecraft.world.phys.AABB
 import net.minecraft.world.phys.Vec3
 import kotlin.math.abs
 import kotlin.math.ceil
+import kotlin.math.cos
 import kotlin.math.floor
+import kotlin.math.sin
 
 private const val IMPACT_CHECKS_PER_TICK = 128
 private const val MAX_IMPACT_REPORTS = 8
@@ -38,6 +41,8 @@ class ClientEffect(
 	val scale: Float,
 	private val baseAge: Float,
 	private val startGameTime: Long,
+	private val viewYaw: Float,
+	private val viewPitch: Float,
 ) {
 
 	val buffer = ParticleBuffer()
@@ -67,6 +72,15 @@ class ClientEffect(
 
 	/** 单帧最多产出的粒子数，缓冲区容量与客户端渲染预算都按它估算。 */
 	val maxParticles: Int = if (cyclesForward) bound.count * (loopLookback + 1) else bound.count
+
+	/** `orientation=view` 且触发时带方向时才旋转，避免世界朝向的特效多算一遍。 */
+	private val rotates: Boolean = bound.definition.orientation == Orientation.VIEW &&
+		(viewYaw != 0f || viewPitch != 0f)
+
+	private val cosYaw: Float = cos(Math.toRadians(viewYaw.toDouble())).toFloat()
+	private val sinYaw: Float = sin(Math.toRadians(viewYaw.toDouble())).toFloat()
+	private val cosPitch: Float = cos(Math.toRadians(viewPitch.toDouble())).toFloat()
+	private val sinPitch: Float = sin(Math.toRadians(viewPitch.toDouble())).toFloat()
 
 	/**
 	 * 客户端 tick 用独立缓冲采样并检测固体方块碰撞，返回新碰撞点（每 3 个 float 一组）。
@@ -107,6 +121,11 @@ class ClientEffect(
 	}
 
 	private fun sampleInto(out: ParticleBuffer, cycle: ParticleBuffer, age: Float) {
+		sampleRawInto(out, cycle, age)
+		if (rotates) rotate(out)
+	}
+
+	private fun sampleRawInto(out: ParticleBuffer, cycle: ParticleBuffer, age: Float) {
 		val scaled = age * playScale
 		if (!bound.definition.loop) {
 			val sampleAge = if (playScale < 0f) {
@@ -137,6 +156,38 @@ class ClientEffect(
 			bound.style.sample(bound, origin, seed, phase + back * bound.duration, cycle)
 			out.append(cycle)
 		}
+	}
+
+	/** 把局部坐标绕原点转到触发时的视线方向：先按 pitch 绕 X 轴，再按 yaw 绕 Y 轴。 */
+	private fun rotate(out: ParticleBuffer) {
+		val ox = origin.x.toFloat()
+		val oy = origin.y.toFloat()
+		val oz = origin.z.toFloat()
+		var i = 0
+		while (i < out.count) {
+			val dx = out.x[i] - ox
+			val dy = out.y[i] - oy
+			val dz = out.z[i] - oz
+			val y = dy * cosPitch - dz * sinPitch
+			val z = dy * sinPitch + dz * cosPitch
+			out.x[i] = ox + dx * cosYaw - z * sinYaw
+			out.y[i] = oy + y
+			out.z[i] = oz + dx * sinYaw + z * cosYaw
+			i++
+		}
+	}
+
+	/** 渲染用：`orientation=view` 时把样式给出的速度向量转到实际朝向。 */
+	fun stretchVector(age: Float): Vec3? {
+		val vector = bound.style.stretchVector(bound, age) ?: return null
+		if (!rotates) return vector
+		val y = vector.y * cosPitch - vector.z * sinPitch
+		val z = vector.y * sinPitch + vector.z * cosPitch
+		return Vec3(
+			vector.x * cosYaw - z * sinYaw,
+			y,
+			vector.x * sinYaw + z * cosYaw,
+		)
 	}
 
 	private companion object {
@@ -204,6 +255,8 @@ object ClientEffects {
 			scale = payload.scale,
 			baseAge = baseAge,
 			startGameTime = Minecraft.getInstance().level?.gameTime ?: 0L,
+			viewYaw = payload.viewYaw,
+			viewPitch = payload.viewPitch,
 		)
 		AstrorbitsParticle.logger.info(
 			"[effect] client start id={} style={} particles={}",

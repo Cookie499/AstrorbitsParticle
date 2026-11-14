@@ -48,6 +48,19 @@ enum class SubEffectTrigger {
 	}
 }
 
+/**
+ * 特效朝向：`WORLD` 使用世界坐标；`VIEW` 把局部 +Z 对齐触发时的视线方向，
+ * 整个特效绕原点旋转，之后不再跟随玩家。
+ */
+enum class Orientation {
+	WORLD, VIEW;
+
+	companion object {
+		fun parse(raw: String): Orientation =
+			entries.firstOrNull { it.name.equals(raw, ignoreCase = true) } ?: WORLD
+	}
+}
+
 data class Emission(
 	val mode: EmissionMode = EmissionMode.BURST,
 	val count: Int = 200,
@@ -95,6 +108,7 @@ data class EffectDefinition(
 	val style: Identifier,
 	val duration: Float,
 	val loop: Boolean,
+	val orientation: Orientation,
 	val reverse: Boolean,
 	val timeScale: Float,
 	val subEffect: Identifier?,
@@ -121,6 +135,7 @@ data class EffectDefinition(
 				?: error("invalid style id")
 			val duration = obj.float("duration", 4f).coerceIn(0.05f, MAX_DURATION)
 			val loop = obj.bool("loop", false)
+			val orientation = Orientation.parse(obj.string("orientation", "world"))
 			val reverse = obj.bool("reverse", false)
 			val timeScale = obj.float("timeScale", 1f).coerceIn(-8f, 8f)
 			val subEffect = obj.get("subEffect")?.takeIf { it.isJsonPrimitive }?.asString
@@ -135,7 +150,7 @@ data class EffectDefinition(
 			val params = obj.objectOrNull("params") ?: JsonObject()
 
 			EffectDefinition(
-				style, duration, loop, reverse, timeScale, subEffect, subEffectTrigger,
+				style, duration, loop, orientation, reverse, timeScale, subEffect, subEffectTrigger,
 				emission, physics, appearance, visibility, params, json,
 			)
 		}

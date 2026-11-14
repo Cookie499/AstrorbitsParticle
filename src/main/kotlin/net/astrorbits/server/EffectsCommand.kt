@@ -12,6 +12,7 @@ import net.minecraft.commands.Commands
 import net.minecraft.network.chat.Component
 import net.minecraft.resources.Identifier
 import net.minecraft.server.permissions.Permissions
+import net.minecraft.world.phys.Vec3
 
 object EffectsCommand {
 	fun register(dispatcher: CommandDispatcher<CommandSourceStack>) {
@@ -44,6 +45,9 @@ object EffectsCommand {
 											}
 											val effect = ServerEffects.play(
 												definition, source.level, source.position,
+												direction = source.entity?.let {
+													Vec3.directionFromRotation(source.rotation.x, source.rotation.y)
+												},
 											)
 											if (effect == null) {
 												source.sendFailure(Component.literal("特效定义校验失败，详见日志"))

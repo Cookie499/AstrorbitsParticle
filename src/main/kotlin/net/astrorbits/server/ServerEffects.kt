@@ -2,6 +2,7 @@ package net.astrorbits.server
 
 import net.astrorbits.AstrorbitsParticle
 import net.astrorbits.model.EffectDefinition
+import net.astrorbits.model.Orientation
 import net.astrorbits.model.SubEffectTrigger
 import net.astrorbits.net.EffectClearPayload
 import net.astrorbits.net.EffectImpactPayload
@@ -28,6 +29,8 @@ import net.minecraft.world.phys.Vec3
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.UUID
+import kotlin.math.asin
+import kotlin.math.atan2
 
 data class Scene(
 	val id: String,
@@ -51,6 +54,8 @@ class ServerEffect(
 	val startTick: Long,
 	val endTick: Long,
 	val scene: Scene?,
+	/** `orientation=view` 且触发时给了方向才有值。 */
+	val viewDirection: Vec3? = null,
 	val subscribers: MutableSet<UUID> = HashSet(),
 	val definitionHash: Int = definition.source.hashCode(),
 	val durationTicks: Long = (definition.duration * 20f).toLong().coerceAtLeast(1),
@@ -71,6 +76,7 @@ object ServerEffects {
 		val level: ServerLevel,
 		val origin: Vec3,
 		val depth: Int,
+		val viewDirection: Vec3?,
 	)
 
 	private var server: MinecraftServer? = null
@@ -106,6 +112,7 @@ object ServerEffects {
 		scale: Float = 1f,
 		seed: Long? = null,
 		depth: Int = 0,
+		direction: Vec3? = null,
 	): ServerEffect? {
 		val hash = definition.source.hashCode()
 		val bound = boundCache.getOrPut(hash) {
@@ -122,6 +129,11 @@ object ServerEffects {
 		val id = nextId++
 		val scene = findScene(level, origin)
 		val durationTicks = (definition.duration * 20f).toLong().coerceAtLeast(1)
+		val viewDirection = if (definition.orientation == Orientation.VIEW) {
+			direction?.takeIf { it.lengthSqr() > 1e-9 }?.normalize()
+		} else {
+			null
+		}
 		val effect = ServerEffect(
 			id = id,
 			definition = definition,
@@ -132,6 +144,7 @@ object ServerEffects {
 			startTick = level.gameTime,
 			endTick = if (definition.loop) Long.MAX_VALUE else level.gameTime + durationTicks,
 			scene = scene,
+			viewDirection = viewDirection,
 			durationTicks = durationTicks,
 			depth = depth,
 			boundsRadius = bound.radius * scale,
@@ -194,7 +207,7 @@ object ServerEffects {
 			if (position.distanceToSqr(effect.origin) > maxDistanceSqr) continue
 			if (!level.isLoaded(BlockPos.containing(position))) continue
 			if (effect.depth >= MAX_SUB_DEPTH) break
-			if (play(target, level, position, 1f, null, effect.depth + 1) == null) continue
+			if (play(target, level, position, 1f, null, effect.depth + 1, effect.viewDirection) == null) continue
 			effect.impactSpawns++
 			spawned++
 		}
@@ -239,10 +252,10 @@ object ServerEffects {
 			if (effect.depth >= MAX_SUB_DEPTH) continue
 			val target = definitions[subId] ?: continue
 			val level = server.getLevel(effect.dimension) ?: continue
-			pending += SubSpawn(target, level, effect.origin, effect.depth + 1)
+			pending += SubSpawn(target, level, effect.origin, effect.depth + 1, effect.viewDirection)
 		}
 		for (spawn in pending) {
-			play(spawn.definition, spawn.level, spawn.origin, 1f, null, spawn.depth)
+			play(spawn.definition, spawn.level, spawn.origin, 1f, null, spawn.depth, spawn.viewDirection)
 		}
 	}
 
@@ -286,6 +299,7 @@ object ServerEffects {
 		} else {
 			elapsed.coerceAtMost(effect.durationTicks).toInt()
 		}
+		val direction = effect.viewDirection
 		val payload = EffectStartPayload(
 			effectId = effect.id,
 			seed = effect.seed,
@@ -294,6 +308,8 @@ object ServerEffects {
 			y = effect.origin.y.toFloat(),
 			z = effect.origin.z.toFloat(),
 			scale = effect.scale,
+			viewYaw = direction?.let { Math.toDegrees(atan2(-it.x, it.z)).toFloat() } ?: 0f,
+			viewPitch = direction?.let { Math.toDegrees(-asin(it.y.coerceIn(-1.0, 1.0))).toFloat() } ?: 0f,
 			definitionHash = effect.definitionHash,
 			definition = if (known) null else effect.definition.source,
 		)

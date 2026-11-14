@@ -63,6 +63,17 @@ object AstrorbitsApi {
 	fun spawnConfigured(definitionId: Identifier, level: ServerLevel, origin: Vec3): Long? =
 		spawnConfigured(definitionId, level, origin, 1f, null)
 
+	/** 同上，[direction] 作为 `orientation=view` 特效的视线方向，其他定义忽略。 */
+	@JvmStatic
+	fun spawnConfigured(
+		definitionId: Identifier,
+		level: ServerLevel,
+		origin: Vec3,
+		scale: Float,
+		seed: Long?,
+		direction: Vec3?,
+	): Long? = definition(definitionId)?.let { spawn(it, level, origin, scale, seed, direction) }
+
 	/**
 	 * 在以 [origin] 为原点的位置生成特效。
 	 *
@@ -76,7 +87,18 @@ object AstrorbitsApi {
 		origin: Vec3,
 		scale: Float,
 		seed: Long?,
-	): Long? = ServerEffects.play(definition, level, origin, scale, seed)?.id
+	): Long? = spawn(definition, level, origin, scale, seed, null)
+
+	/** 同上，[direction] 作为 `orientation=view` 特效的视线方向，其他定义忽略。 */
+	@JvmStatic
+	fun spawn(
+		definition: EffectDefinition,
+		level: ServerLevel,
+		origin: Vec3,
+		scale: Float,
+		seed: Long?,
+		direction: Vec3?,
+	): Long? = ServerEffects.play(definition, level, origin, scale, seed, direction = direction)?.id
 
 	@JvmStatic
 	fun spawn(definition: EffectDefinition, level: ServerLevel, origin: Vec3): Long? =
@@ -85,6 +107,17 @@ object AstrorbitsApi {
 	@JvmStatic
 	fun spawnJson(json: String, level: ServerLevel, origin: Vec3, scale: Float, seed: Long?): Long? =
 		parseDefinition(json).getOrNull()?.let { spawn(it, level, origin, scale, seed) }
+
+	/** 同上，[direction] 作为 `orientation=view` 特效的视线方向，其他定义忽略。 */
+	@JvmStatic
+	fun spawnJson(
+		json: String,
+		level: ServerLevel,
+		origin: Vec3,
+		scale: Float,
+		seed: Long?,
+		direction: Vec3?,
+	): Long? = parseDefinition(json).getOrNull()?.let { spawn(it, level, origin, scale, seed, direction) }
 
 	@JvmStatic
 	fun spawnJson(json: String, level: ServerLevel, origin: Vec3): Long? =
