@@ -38,13 +38,15 @@ enum class SpriteVariation {
 	}
 }
 
-/** 子特效触发方式：定义结束，或客户端报告粒子碰撞。 */
+/** 子特效触发方式：定义结束、单个粒子消失，或客户端报告粒子碰撞。 */
 enum class SubEffectTrigger {
-	END, IMPACT;
+	END, IMPACT, PARTICLE_END;
 
 	companion object {
-		fun parse(raw: String): SubEffectTrigger =
-			entries.firstOrNull { it.name.equals(raw, ignoreCase = true) } ?: END
+		fun parse(raw: String): SubEffectTrigger {
+			val normalized = raw.replace('-', '_')
+			return entries.firstOrNull { it.name.equals(normalized, ignoreCase = true) } ?: END
+		}
 	}
 }
 

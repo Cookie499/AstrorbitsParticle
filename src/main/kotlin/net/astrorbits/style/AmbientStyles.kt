@@ -188,7 +188,7 @@ object Rain : ParticleStyle {
 					(x - dir.x.toFloat() * back + jx),
 					(y - dir.y.toFloat() * back + jy),
 					(z - dir.z.toFloat() * back + jz),
-					out, 1f, alphaScale,
+					out, 1f, alphaScale, emissionIndex = drop,
 				)
 			}
 		}

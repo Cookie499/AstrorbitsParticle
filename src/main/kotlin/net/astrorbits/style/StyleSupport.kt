@@ -7,6 +7,7 @@ object StyleSupport {
 	/**
 	 * 统一的外观求值：尺寸抖动、按年龄的尺寸/透明度、颜色抖动或渐变。
 	 * `colorOverride` 为 0 时使用外观自身的颜色。
+	 * [emissionIndex] 写进粒子的 id，供按粒子定位的子特效使用；同一发射序号拆成多段时传序号本身。
 	 */
 	fun emit(
 		effect: BoundEffect,
@@ -21,6 +22,7 @@ object StyleSupport {
 		sizeScale: Float = 1f,
 		alphaScale: Float = 1f,
 		colorOverride: Int = 0,
+		emissionIndex: Int = index,
 	) {
 		val appearance = effect.appearance
 		val size = appearance.size.at(age) *
@@ -40,7 +42,7 @@ object StyleSupport {
 		}
 		val alphaByte = (alpha.coerceIn(0f, 1f) * 255f).toInt()
 		color = (color and 0x00FFFFFF) or (alphaByte shl 24)
-		out.push(px, py, pz, size, alpha, color)
+		out.push(px, py, pz, size, alpha, color, emissionIndex)
 	}
 }
 

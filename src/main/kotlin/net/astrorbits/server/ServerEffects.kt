@@ -11,6 +11,8 @@ import net.astrorbits.net.EffectStopPayload
 import net.astrorbits.net.ModPayloads
 import net.astrorbits.style.BoundEffect
 import net.astrorbits.style.EffectBinder
+import net.astrorbits.style.EmissionMath
+import net.astrorbits.style.ParticleBuffer
 import net.astrorbits.style.ParticleStyles
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
@@ -31,6 +33,8 @@ import java.nio.file.Path
 import java.util.UUID
 import kotlin.math.asin
 import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.sin
 
 data class Scene(
 	val id: String,
@@ -69,6 +73,7 @@ object ServerEffects {
 	private const val SCAN_INTERVAL = 10
 	private const val DEFINITION_CACHE_LIMIT = 128
 	private const val MAX_IMPACT_SUB_EFFECTS = 8
+	private const val MAX_PARTICLE_SUB_EFFECTS = 8
 	private const val MAX_SUB_DEPTH = 3
 
 	private data class SubSpawn(
@@ -79,8 +84,21 @@ object ServerEffects {
 		val viewDirection: Vec3?,
 	)
 
+	/** 一个待生成的粒子消失子特效：在 [sampleAge] 时刻采样，取发射序号 [index] 的位置。 */
+	private class ParticleEndEntry(val tick: Long, val index: Int, val sampleAge: Float)
+
+	private class ParticleEndSchedule(
+		val bound: BoundEffect,
+		val entries: List<ParticleEndEntry>,
+	) {
+		val buffer = ParticleBuffer()
+		var cursor: Int = 0
+		var spawns: Int = 0
+	}
+
 	private var server: MinecraftServer? = null
 	private val effects = LinkedHashMap<Long, ServerEffect>()
+	private val particleEnds = HashMap<Long, ParticleEndSchedule>()
 	private val definitions = LinkedHashMap<Identifier, EffectDefinition>()
 	private val boundCache = LinkedHashMap<Int, BoundEffect>()
 	private val sentDefinitions = HashMap<UUID, MutableSet<Int>>()
@@ -91,6 +109,7 @@ object ServerEffects {
 	fun init(server: MinecraftServer) {
 		this.server = server
 		effects.clear()
+		particleEnds.clear()
 		sentDefinitions.clear()
 		nextId = 1L
 		lastScan = -SCAN_INTERVAL.toLong()
@@ -99,6 +118,8 @@ object ServerEffects {
 
 	fun tick(server: MinecraftServer) {
 		val now = server.overworld().gameTime
+		// 粒子在效果结束的同一 tick 消失，先处理再移除本体。
+		spawnParticleEnds(server, now)
 		expire(server, now)
 		if (now - lastScan < SCAN_INTERVAL) return
 		lastScan = now
@@ -129,6 +150,7 @@ object ServerEffects {
 		val id = nextId++
 		val scene = findScene(level, origin)
 		val durationTicks = (definition.duration * 20f).toLong().coerceAtLeast(1)
+		val effectSeed = seed ?: level.random.nextLong()
 		val viewDirection = if (definition.orientation == Orientation.VIEW) {
 			direction?.takeIf { it.lengthSqr() > 1e-9 }?.normalize()
 		} else {
@@ -137,7 +159,7 @@ object ServerEffects {
 		val effect = ServerEffect(
 			id = id,
 			definition = definition,
-			seed = seed ?: level.random.nextLong(),
+			seed = effectSeed,
 			dimension = level.dimension(),
 			origin = origin,
 			scale = scale,
@@ -150,6 +172,7 @@ object ServerEffects {
 			boundsRadius = bound.radius * scale,
 		)
 		effects[id] = effect
+		buildParticleEndSchedule(effect, bound)?.let { particleEnds[id] = it }
 		// 频谱扫描每 10 tick 一次，新建特效要立刻下发，否则会跳过开头
 		for (player in level.server.playerList.players) {
 			if (!isEligible(player, effect, false)) continue
@@ -165,6 +188,7 @@ object ServerEffects {
 
 	fun stop(id: Long): Boolean {
 		val effect = effects.remove(id) ?: return false
+		particleEnds.remove(id)
 		val level = server?.getLevel(effect.dimension) ?: return true
 		val payload = EffectStopPayload(longArrayOf(id))
 		for (uuid in effect.subscribers) {
@@ -179,6 +203,7 @@ object ServerEffects {
 		val ids = effects.keys.toLongArray()
 		if (ids.isEmpty()) return
 		effects.clear()
+		particleEnds.clear()
 		val payload = EffectStopPayload(ids)
 		server?.playerList?.players?.forEach { ServerPlayNetworking.send(it, payload) }
 	}
@@ -234,6 +259,143 @@ object ServerEffects {
 		server?.playerList?.players?.forEach { ServerPlayNetworking.send(it, EffectClearPayload()) }
 	}
 
+	/**
+	 * 按每颗粒子自己的可见结束时刻排子特效。只支持非循环、正向、timeScale=1 的解析式样式；
+	 * 不支持时返回 null，不生成任何东西。
+	 */
+	private fun buildParticleEndSchedule(effect: ServerEffect, bound: BoundEffect): ParticleEndSchedule? {
+		val definition = effect.definition
+		if (definition.subEffectTrigger != SubEffectTrigger.PARTICLE_END) return null
+		if (definition.loop || definition.reverse || definition.timeScale != 1f) return null
+		if (!bound.style.cyclicEmission) return null
+		val target = definition.subEffect?.let(definitions::get) ?: return null
+		if (target.subEffect != null) return null
+		val u = visibleFraction(bound)
+		if (u <= 0f) return null
+		val count = bound.count
+		val indices = if (count <= MAX_PARTICLE_SUB_EFFECTS) {
+			IntArray(count) { it }
+		} else {
+			IntArray(MAX_PARTICLE_SUB_EFFECTS) { it * count / MAX_PARTICLE_SUB_EFFECTS }
+		}
+		val entries = ArrayList<ParticleEndEntry>(indices.size)
+		for (index in indices) {
+			val birth = EmissionMath.birth(bound.emission, effect.seed, index, count)
+			if (birth >= bound.duration) continue
+			val life = EmissionMath.lifetime(bound.emission, effect.seed, index)
+			val endAge = (birth + u * life).coerceAtMost(bound.duration)
+			if (endAge <= birth) continue
+			val sampleAge = (endAge - 0.002f).coerceAtLeast(birth + 0.0001f)
+			val tick = effect.startTick + (endAge * 20f).toLong().coerceAtLeast(0L)
+			entries += ParticleEndEntry(tick, index, sampleAge)
+		}
+		if (entries.isEmpty()) return null
+		entries.sortBy { it.tick }
+		return ParticleEndSchedule(bound, entries)
+	}
+
+	/** 外观曲线里最后一个仍可见的归一化年龄；估算用，不考虑样式自己的 alphaScale。 */
+	private fun visibleFraction(bound: BoundEffect): Float {
+		var u = 1f
+		while (u > 0f) {
+			if (bound.appearance.alphaByAge.at(u) > 0.02f && bound.appearance.sizeByAge.at(u) > 0.01f) {
+				return u
+			}
+			u -= 0.01f
+		}
+		return 0f
+	}
+
+	private fun spawnParticleEnds(server: MinecraftServer, now: Long) {
+		if (particleEnds.isEmpty()) return
+		val pending = ArrayList<SubSpawn>()
+		val iterator = particleEnds.entries.iterator()
+		while (iterator.hasNext()) {
+			val (id, schedule) = iterator.next()
+			val effect = effects[id]
+			if (effect == null) {
+				iterator.remove()
+				continue
+			}
+			val target = effect.definition.subEffect?.let(definitions::get)
+			val level = server.getLevel(effect.dimension)
+			if (target == null || target.subEffect != null || level == null ||
+				effect.depth >= MAX_SUB_DEPTH
+			) {
+				iterator.remove()
+				continue
+			}
+			while (schedule.cursor < schedule.entries.size && schedule.spawns < MAX_PARTICLE_SUB_EFFECTS) {
+				val entry = schedule.entries[schedule.cursor]
+				if (entry.tick > now) break
+				schedule.cursor++
+				val position = particleEndPosition(effect, schedule, entry) ?: continue
+				pending += SubSpawn(target, level, position, effect.depth + 1, effect.viewDirection)
+				schedule.spawns++
+			}
+			if (schedule.spawns > 0 && schedule.cursor >= schedule.entries.size) {
+				AstrorbitsParticle.logger.info(
+					"[effect] particle_end id={} spawned {} sub-effect(s) of {}",
+					effect.id, schedule.spawns, target.style,
+				)
+			}
+			if (schedule.cursor >= schedule.entries.size || schedule.spawns >= MAX_PARTICLE_SUB_EFFECTS) {
+				iterator.remove()
+			}
+		}
+		for (spawn in pending) {
+			play(spawn.definition, spawn.level, spawn.origin, 1f, null, spawn.depth, spawn.viewDirection)
+		}
+	}
+
+	/** 在 [entry.sampleAge] 采样，按发射序号取粒子位置，再套用本体的缩放与视线朝向。 */
+	private fun particleEndPosition(
+		effect: ServerEffect,
+		schedule: ParticleEndSchedule,
+		entry: ParticleEndEntry,
+	): Vec3? {
+		val buffer = schedule.buffer
+		buffer.reset(schedule.bound.count)
+		schedule.bound.style.sample(schedule.bound, effect.origin, effect.seed, entry.sampleAge, buffer)
+		var i = 0
+		while (i < buffer.count) {
+			if (buffer.ids[i] == entry.index) {
+				val offset = Vec3(
+					buffer.x[i] - effect.origin.x,
+					buffer.y[i] - effect.origin.y,
+					buffer.z[i] - effect.origin.z,
+				)
+				return effect.origin.add(rotateView(offset, effect).scale(effect.scale.toDouble()))
+			}
+			i++
+		}
+		return null
+	}
+
+	private fun rotateView(offset: Vec3, effect: ServerEffect): Vec3 {
+		if (effect.definition.orientation != Orientation.VIEW) return offset
+		val direction = effect.viewDirection ?: return offset
+		val yaw = Math.toRadians(viewYaw(direction).toDouble())
+		val pitch = Math.toRadians(viewPitch(direction).toDouble())
+		val cosYaw = cos(yaw)
+		val sinYaw = sin(yaw)
+		val cosPitch = cos(pitch)
+		val sinPitch = sin(pitch)
+		val y = offset.y * cosPitch - offset.z * sinPitch
+		val z = offset.y * sinPitch + offset.z * cosPitch
+		return Vec3(
+			offset.x * cosYaw - z * sinYaw,
+			y,
+			offset.x * sinYaw + z * cosYaw,
+		)
+	}
+
+	private fun viewYaw(direction: Vec3): Float =
+		Math.toDegrees(atan2(-direction.x, direction.z)).toFloat()
+
+	private fun viewPitch(direction: Vec3): Float =
+		Math.toDegrees(-asin(direction.y.coerceIn(-1.0, 1.0))).toFloat()
+
 	private fun expire(server: MinecraftServer, now: Long) {
 		val pending = ArrayList<SubSpawn>()
 		val iterator = effects.values.iterator()
@@ -241,6 +403,7 @@ object ServerEffects {
 			val effect = iterator.next()
 			if (effect.endTick == Long.MAX_VALUE || now < effect.endTick) continue
 			iterator.remove()
+			particleEnds.remove(effect.id)
 			val payload = EffectStopPayload(longArrayOf(effect.id))
 			for (uuid in effect.subscribers) {
 				server.playerList.players.firstOrNull { it.uuid == uuid }?.let {
@@ -308,8 +471,8 @@ object ServerEffects {
 			y = effect.origin.y.toFloat(),
 			z = effect.origin.z.toFloat(),
 			scale = effect.scale,
-			viewYaw = direction?.let { Math.toDegrees(atan2(-it.x, it.z)).toFloat() } ?: 0f,
-			viewPitch = direction?.let { Math.toDegrees(-asin(it.y.coerceIn(-1.0, 1.0))).toFloat() } ?: 0f,
+			viewYaw = direction?.let(::viewYaw) ?: 0f,
+			viewPitch = direction?.let(::viewPitch) ?: 0f,
 			definitionHash = effect.definitionHash,
 			definition = if (known) null else effect.definition.source,
 		)

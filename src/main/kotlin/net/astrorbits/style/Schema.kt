@@ -84,7 +84,7 @@ val COMMON_SCHEMA: StyleSchema = StyleSchema(
 		textSpec("orientation", "world", "特效朝向：world 固定世界坐标；view 把局部 +Z 对齐触发时的视线方向"),
 		boolSpec("reverse", false, "反向播放：按 duration - age 采样；与 loop 同时启用时先按 duration 取模"),
 		textSpec("subEffect", "", "子特效定义 id，不写则不生成"),
-		textSpec("subEffectTrigger", "end", "子特效触发方式：end 本体结束、impact 客户端粒子碰撞"),
+		textSpec("subEffectTrigger", "end", "子特效触发方式：end 本体结束、impact 客户端粒子碰撞、particle_end 单个粒子消失"),
 		textSpec("emission.mode", "burst", "发射方式：burst 同时出生、stream 在窗口内均匀出生、random 随机出生"),
 		intSpec("emission.count", 200, "粒子总数", "1..8192", 1f, 8192f),
 		numbersSpec("emission.window", floatArrayOf(0f, 0f), "发射窗口 [开始, 结束]（秒）"),

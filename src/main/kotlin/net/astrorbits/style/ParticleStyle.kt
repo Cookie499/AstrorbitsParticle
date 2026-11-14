@@ -407,6 +407,10 @@ class ParticleBuffer {
 	var argb = IntArray(0)
 		private set
 
+	/** 每颗粒子对应的发射序号；直接用 [push] 写入时为 -1。 */
+	var ids = IntArray(0)
+		private set
+
 	/** 保证容量至少为 [n]，不改变已有粒子。 */
 	fun reserve(n: Int) {
 		if (x.size >= n) return
@@ -416,6 +420,7 @@ class ParticleBuffer {
 		size = size.copyOf(n)
 		alpha = alpha.copyOf(n)
 		argb = argb.copyOf(n)
+		ids = ids.copyOf(n)
 	}
 
 	fun reset(n: Int) {
@@ -435,10 +440,16 @@ class ParticleBuffer {
 		System.arraycopy(other.size, 0, size, start, other.count)
 		System.arraycopy(other.alpha, 0, alpha, start, other.count)
 		System.arraycopy(other.argb, 0, argb, start, other.count)
+		System.arraycopy(other.ids, 0, ids, start, other.count)
 		count = total
 	}
 
 	fun push(px: Float, py: Float, pz: Float, pSize: Float, pAlpha: Float, color: Int) {
+		push(px, py, pz, pSize, pAlpha, color, -1)
+	}
+
+	/** [id] 是发射序号，供按粒子定位的样式或子特效使用；未知时传 -1。 */
+	fun push(px: Float, py: Float, pz: Float, pSize: Float, pAlpha: Float, color: Int, id: Int) {
 		val i = count
 		if (i >= x.size) reserve(maxOf(16, x.size * 2))
 		x[i] = px
@@ -447,6 +458,7 @@ class ParticleBuffer {
 		size[i] = pSize
 		alpha[i] = pAlpha
 		argb[i] = color
+		ids[i] = id
 		count = i + 1
 	}
 }
