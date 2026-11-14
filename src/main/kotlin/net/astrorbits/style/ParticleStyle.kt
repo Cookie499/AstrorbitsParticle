@@ -38,6 +38,15 @@ interface ParticleStyle {
 
 	/** 该样式在 [age] 时刻的近似速度，供 appearance.stretch 拉长面片；无法确定返回 null。 */
 	fun stretchVector(effect: BoundEffect, age: Float): Vec3? = null
+
+	/**
+	 * 循环播放时是否按周期重新发射一批粒子。
+	 *
+	 * 为 `true` 时客户端会把仍可能存活的更早周期依次采样后追加到同一缓冲区，
+	 * 传入的 `age` 可超过 `duration`；按周期发射的样式用 [EmissionMath.birth] 与
+	 * [EmissionMath.lifetime] 过滤即可。连续运动、不重新生成粒子的样式返回 `false`。
+	 */
+	val cyclicEmission: Boolean get() = true
 }
 
 object ParticleStyles {
@@ -398,29 +407,40 @@ class ParticleBuffer {
 	var argb = IntArray(0)
 		private set
 
+	/** 保证容量至少为 [n]，不改变已有粒子。 */
+	fun reserve(n: Int) {
+		if (x.size >= n) return
+		x = x.copyOf(n)
+		y = y.copyOf(n)
+		z = z.copyOf(n)
+		size = size.copyOf(n)
+		alpha = alpha.copyOf(n)
+		argb = argb.copyOf(n)
+	}
+
 	fun reset(n: Int) {
-		if (x.size < n) {
-			x = FloatArray(n)
-			y = FloatArray(n)
-			z = FloatArray(n)
-			size = FloatArray(n)
-			alpha = FloatArray(n)
-			argb = IntArray(n)
-		}
+		reserve(n)
 		count = 0
+	}
+
+	/** 把 [other] 的粒子追加到末尾；数组复用，只在容量不足时扩容。 */
+	fun append(other: ParticleBuffer) {
+		if (other.count == 0) return
+		val start = count
+		val total = start + other.count
+		reserve(total)
+		System.arraycopy(other.x, 0, x, start, other.count)
+		System.arraycopy(other.y, 0, y, start, other.count)
+		System.arraycopy(other.z, 0, z, start, other.count)
+		System.arraycopy(other.size, 0, size, start, other.count)
+		System.arraycopy(other.alpha, 0, alpha, start, other.count)
+		System.arraycopy(other.argb, 0, argb, start, other.count)
+		count = total
 	}
 
 	fun push(px: Float, py: Float, pz: Float, pSize: Float, pAlpha: Float, color: Int) {
 		val i = count
-		if (i >= x.size) {
-			val capacity = maxOf(16, x.size * 2)
-			x = x.copyOf(capacity)
-			y = y.copyOf(capacity)
-			z = z.copyOf(capacity)
-			size = size.copyOf(capacity)
-			alpha = alpha.copyOf(capacity)
-			argb = argb.copyOf(capacity)
-		}
+		if (i >= x.size) reserve(maxOf(16, x.size * 2))
 		x[i] = px
 		y[i] = py
 		z[i] = pz

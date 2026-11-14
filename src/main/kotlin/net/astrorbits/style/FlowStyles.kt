@@ -245,6 +245,9 @@ object Wave : ParticleStyle {
 object Comet : ParticleStyle {
 	override val id = "astrorbitsparticle:comet"
 
+	/** 彗星整条轨迹由当前年龄连续求出，不按周期重新发射。 */
+	override val cyclicEmission = false
+
 	override val schema = StyleSchema(
 		id, "彗星",
 		params = listOf(

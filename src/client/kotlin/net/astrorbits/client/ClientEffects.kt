@@ -22,9 +22,13 @@ import net.minecraft.core.BlockPos
 import net.minecraft.network.chat.Component
 import net.minecraft.world.phys.AABB
 import net.minecraft.world.phys.Vec3
+import kotlin.math.abs
+import kotlin.math.ceil
+import kotlin.math.floor
 
 private const val IMPACT_CHECKS_PER_TICK = 128
 private const val MAX_IMPACT_REPORTS = 8
+private const val MAX_LOOP_LOOKBACK = 8
 
 class ClientEffect(
 	val id: Long,
@@ -38,11 +42,31 @@ class ClientEffect(
 
 	val buffer = ParticleBuffer()
 	private val impactBuffer = ParticleBuffer()
+
+	/** 周期采样暂存：渲染与客户端 tick 各一份，避免两个线程写同一组数组。 */
+	private val renderCycle = ParticleBuffer()
+	private val impactCycle = ParticleBuffer()
 	private val impactedBlocks = HashSet<Long>()
 	private var impactReports: Int = 0
 	val cullBox: AABB = AABB(origin, origin).inflate(
 		(bound.radius * scale + bound.definition.visibility.boundsPadding).toDouble(),
 	)
+
+	private val playScale: Float =
+		bound.definition.timeScale * if (bound.definition.reverse) -1f else 1f
+
+	/** 循环时回溯的周期数：寿命上界覆盖的周期数，至少 1，上限 [MAX_LOOP_LOOKBACK]。 */
+	private val loopLookback: Int = run {
+		val emission = bound.emission
+		val lifespan = emission.lifetime * (1f + abs(emission.lifetimeJitter))
+		ceil(lifespan.coerceAtLeast(0f) / bound.duration).toInt().coerceIn(1, MAX_LOOP_LOOKBACK)
+	}
+
+	private val cyclesForward: Boolean =
+		bound.definition.loop && bound.style.cyclicEmission && playScale >= 0f
+
+	/** 单帧最多产出的粒子数，缓冲区容量与客户端渲染预算都按它估算。 */
+	val maxParticles: Int = if (cyclesForward) bound.count * (loopLookback + 1) else bound.count
 
 	/**
 	 * 客户端 tick 用独立缓冲采样并检测固体方块碰撞，返回新碰撞点（每 3 个 float 一组）。
@@ -50,7 +74,7 @@ class ClientEffect(
 	 */
 	fun collectImpacts(level: ClientLevel): FloatArray {
 		if (impactReports >= MAX_IMPACT_REPORTS) return EMPTY_POINTS
-		sampleInto(impactBuffer, ageAt(level.gameTime, 0f))
+		sampleInto(impactBuffer, impactCycle, ageAt(level.gameTime, 0f))
 		if (impactBuffer.count == 0) return EMPTY_POINTS
 		val points = ArrayList<Float>(MAX_IMPACT_REPORTS * 3)
 		val step = (impactBuffer.count / IMPACT_CHECKS_PER_TICK).coerceAtLeast(1)
@@ -78,23 +102,41 @@ class ClientEffect(
 	fun expired(gameTime: Long): Boolean = !bound.definition.loop && ageAt(gameTime, 0f) >= bound.duration
 
 	fun sample(gameTime: Long, partialTick: Float): ParticleBuffer {
-		sampleInto(buffer, ageAt(gameTime, partialTick))
+		sampleInto(buffer, renderCycle, ageAt(gameTime, partialTick))
 		return buffer
 	}
 
-	private fun sampleInto(out: ParticleBuffer, age: Float) {
-		out.reset(bound.count)
-		val scale = bound.definition.timeScale * if (bound.definition.reverse) -1f else 1f
-		val scaled = age * scale
-		val sampleAge = when {
-			bound.definition.loop -> {
-				val wrapped = scaled % bound.duration
-				if (wrapped < 0f) wrapped + bound.duration else wrapped
+	private fun sampleInto(out: ParticleBuffer, cycle: ParticleBuffer, age: Float) {
+		val scaled = age * playScale
+		if (!bound.definition.loop) {
+			val sampleAge = if (playScale < 0f) {
+				(bound.duration + scaled).coerceIn(0f, bound.duration)
+			} else {
+				scaled
 			}
-			scale < 0f -> (bound.duration + scaled).coerceIn(0f, bound.duration)
-			else -> scaled
+			out.reset(bound.count)
+			bound.style.sample(bound, origin, seed, sampleAge, out)
+			return
 		}
-		bound.style.sample(bound, origin, seed, sampleAge, out)
+		if (!cyclesForward) {
+			val wrapped = scaled % bound.duration
+			out.reset(bound.count)
+			bound.style.sample(
+				bound, origin, seed,
+				if (wrapped < 0f) wrapped + bound.duration else wrapped,
+				out,
+			)
+			return
+		}
+		val cycleIndex = floor(scaled / bound.duration).toLong()
+		val phase = scaled - cycleIndex * bound.duration
+		// 从最早可能存活的周期采到当前周期；样式按 local/life 过滤，缓冲区只留下还活着的粒子。
+		out.reset(maxParticles)
+		for (back in minOf(cycleIndex, loopLookback.toLong()).toInt() downTo 0) {
+			cycle.reset(bound.count)
+			bound.style.sample(bound, origin, seed, phase + back * bound.duration, cycle)
+			out.append(cycle)
+		}
 	}
 
 	private companion object {

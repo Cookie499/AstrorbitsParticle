@@ -80,7 +80,7 @@ val COMMON_SCHEMA: StyleSchema = StyleSchema(
 	common = true,
 	params = listOf(
 		numSpec("duration", 4f, "特效总时长（秒），循环播放时为一个周期", "0.05..3600", 0.05f, 3600f),
-		boolSpec("loop", false, "是否循环播放"),
+		boolSpec("loop", false, "是否循环播放：每个周期重新发射，粒子按寿命自然结束"),
 		boolSpec("reverse", false, "反向播放：按 duration - age 采样；与 loop 同时启用时先按 duration 取模"),
 		textSpec("subEffect", "", "子特效定义 id，不写则不生成"),
 		textSpec("subEffectTrigger", "end", "子特效触发方式：end 本体结束、impact 客户端粒子碰撞"),
@@ -88,7 +88,7 @@ val COMMON_SCHEMA: StyleSchema = StyleSchema(
 		intSpec("emission.count", 200, "粒子总数", "1..8192", 1f, 8192f),
 		numbersSpec("emission.window", floatArrayOf(0f, 0f), "发射窗口 [开始, 结束]（秒）"),
 		numSpec("emission.jitter", 0f, "出生时间抖动（秒）", "0..10", 0f, 10f),
-		numSpec("emission.lifetime", 4f, "单个粒子寿命（秒），缺省等于 duration", "0.05..3600", 0.05f, 3600f),
+		numSpec("emission.lifetime", 4f, "单个粒子寿命（秒），缺省等于 duration；循环时决定回溯的周期数", "0.05..3600", 0.05f, 3600f),
 		numSpec("emission.lifetimeJitter", 0.1f, "寿命随机抖动比例", "0..1", 0f, 1f),
 		vecSpec("physics.gravity", 0f, -9.8f, 0f, "重力加速度（块/秒²），也可写成单个 Y 分量"),
 		numSpec("physics.drag", 0f, "线性阻尼（1/秒）", "0..10", 0f, 10f),

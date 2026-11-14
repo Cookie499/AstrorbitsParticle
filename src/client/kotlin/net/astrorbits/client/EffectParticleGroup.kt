@@ -76,7 +76,7 @@ class EffectParticleGroup(engine: ParticleEngine) : ParticleGroup<Particle>(engi
 			.filter { frustum.isVisible(it.cullBox) }
 			.sortedBy { it.origin.distanceToSqr(cameraPos) }
 			.take(net.astrorbits.config.ModConfig.maxVisibleEffects)
-		val planned = visible.sumOf { it.bound.count }
+		val planned = visible.sumOf { it.maxParticles }
 		val budgetStride = if (planned > net.astrorbits.config.ModConfig.maxVisibleParticles) {
 			kotlin.math.ceil(planned.toFloat() / net.astrorbits.config.ModConfig.maxVisibleParticles).toInt().coerceIn(1, MAX_STRIDE)
 		} else {

@@ -12,6 +12,9 @@ import kotlin.math.sin
 object Ambience : ParticleStyle {
 	override val id = "astrorbitsparticle:ambience"
 
+	/** 氛围粒子是常驻场，没有逐周期出生，循环时只按当前相位采样。 */
+	override val cyclicEmission = false
+
 	override val schema = StyleSchema(
 		id, "氛围",
 		params = listOf(
