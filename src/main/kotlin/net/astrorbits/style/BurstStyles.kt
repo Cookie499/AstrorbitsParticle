@@ -23,6 +23,8 @@ object RadialBurst : ParticleStyle {
 			vecSpec("axis", 0f, 1f, 0f, "锥形喷射主方向，只在 cone 小于 180 时生效"),
 			numSpec("cone", 180f, "喷射半角（度），180 为全向", "0..180", 0f, 180f),
 			numSpec("shellBias", 0f, "速度分布向快端偏移的比例", "0..1", 0f, 1f),
+			numSpec("bobAmplitude", 0f, "沿世界 Y 轴的上下波动幅度（块），0 关闭", "0..8", 0f, 8f),
+			numSpec("bobPeriod", 1.2f, "上下波动周期（秒），按粒子自身年龄计", "0.1..120", 0.1f, 120f),
 		),
 	)
 
@@ -33,6 +35,8 @@ object RadialBurst : ParticleStyle {
 		val axis: Vec3,
 		val cone: Float,
 		val shellBias: Float,
+		val bobAmplitude: Float,
+		val bobPeriod: Float,
 	) : BoundStyle
 
 	override fun bind(binder: Binder): BoundStyle = Params(
@@ -42,6 +46,8 @@ object RadialBurst : ParticleStyle {
 		axis = binder.vec3("axis"),
 		cone = binder.number("cone"),
 		shellBias = binder.number("shellBias"),
+		bobAmplitude = binder.number("bobAmplitude"),
+		bobPeriod = binder.number("bobPeriod"),
 	)
 
 	override fun sample(effect: BoundEffect, origin: Vec3, seed: Long, age: Float, out: ParticleBuffer) {
@@ -51,6 +57,8 @@ object RadialBurst : ParticleStyle {
 		val offset = FloatArray(3)
 		val halfAngle = params.cone * DEG_TO_RAD
 		val speedBase = params.speed.at(age)
+		val bobAmplitude = params.bobAmplitude
+		val bobPeriod = params.bobPeriod
 
 		for (i in 0 until effect.count) {
 			val life = EmissionMath.lifetime(effect.emission, seed, i)
@@ -69,9 +77,15 @@ object RadialBurst : ParticleStyle {
 				effect.physics.gravity, effect.physics.drag, effect.physics.wind, local,
 			)
 			StyleMath.jitterInto(offset, params.originJitter, seed, i)
+			val bob = if (bobAmplitude != 0f) {
+				val phase = HashRandom.unit(seed, Streams.PHASE, i) * 2.0 * PI
+				(bobAmplitude * sin(2.0 * PI * local / bobPeriod + phase)).toFloat()
+			} else {
+				0f
+			}
 			StyleSupport.emit(
 				effect, seed, i, age, local / life,
-				pos[0] + offset[0], pos[1] + offset[1], pos[2] + offset[2], out,
+				pos[0] + offset[0], pos[1] + offset[1] + bob, pos[2] + offset[2], out,
 			)
 		}
 	}
