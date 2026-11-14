@@ -71,6 +71,7 @@ data class Appearance(
 	val sprite: Identifier = Identifier.withDefaultNamespace("generic_0"),
 	/** 原版粒子定义 id（`particles/<path>.json`）里 `textures` 有多张时，逐粒子还是逐特效选。 */
 	val spriteVariation: SpriteVariation = SpriteVariation.PARTICLE,
+	val spriteCycleTicks: Int = 2,
 	val size: JsonElement? = null,
 	val sizeJitter: Float = 0.15f,
 	val sizeByAge: JsonElement? = null,
@@ -163,6 +164,7 @@ data class EffectDefinition(
 			sprite = Identifier.tryParse(obj.string("sprite", "minecraft:generic_0"))
 				?: Identifier.withDefaultNamespace("generic_0"),
 			spriteVariation = SpriteVariation.parse(obj.string("spriteVariation", "particle")),
+			spriteCycleTicks = obj.int("spriteCycleTicks", 2).coerceIn(1, 200),
 			size = obj.get("size"),
 			sizeJitter = obj.float("sizeJitter", 0.15f),
 			sizeByAge = obj.get("sizeByAge"),

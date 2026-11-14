@@ -95,7 +95,7 @@ class EffectParticleGroup(engine: ParticleEngine) : ParticleGroup<Particle>(engi
 			} else if (appearance.spriteVariation == SpriteVariation.EFFECT) {
 				sprites[effectVariant(effect.seed, sprites.size)]
 			} else if (appearance.spriteVariation == SpriteVariation.CYCLE) {
-				val frame = (level.gameTime / 2 + effectVariant(effect.seed, sprites.size))
+				val frame = (level.gameTime / appearance.spriteCycleTicks.coerceAtLeast(1) + effectVariant(effect.seed, sprites.size))
 					.mod(sprites.size.toLong()).toInt()
 				sprites[frame]
 			} else {

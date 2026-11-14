@@ -94,6 +94,7 @@ val COMMON_SCHEMA: StyleSchema = StyleSchema(
 		numSpec("physics.drag", 0f, "线性阻尼（1/秒）", "0..10", 0f, 10f),
 		vecSpec("physics.wind", 0f, 0f, 0f, "风场速度（块/秒）"),
 		textSpec("appearance.sprite", "minecraft:generic_0", "粒子贴图 id，也可以写原版粒子定义 id（如 end_rod）；原版定义有多张贴图时按下一项选择"),
+		numSpec("appearance.spriteCycleTicks", 2f, "cycle 模式换图间隔（tick）", "1..200", 1f, 200f),
 		textSpec("appearance.spriteVariation", "particle", "多贴图变体选择：particle 每颗粒子随机取一张，effect 整个特效按 seed 共用一张，cycle 每 2 tick 轮换"),
 		numSpec("appearance.size", 0.2f, "面片边长（块）", "0..16", 0f, 16f),
 		numSpec("appearance.sizeJitter", 0.15f, "尺寸随机抖动比例", "0..1", 0f, 1f),

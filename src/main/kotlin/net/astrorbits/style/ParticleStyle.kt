@@ -257,6 +257,7 @@ class BoundEffect(
 class BoundAppearance(
 	val sprite: Identifier,
 	val spriteVariation: SpriteVariation,
+	val spriteCycleTicks: Int,
 	val size: BoundNumber,
 	val sizeJitter: Float,
 	val sizeByAge: FloatCurve,
@@ -298,6 +299,7 @@ object EffectBinder {
 	private fun bindAppearance(appearance: Appearance, binder: Binder): BoundAppearance = BoundAppearance(
 		sprite = appearance.sprite,
 		spriteVariation = appearance.spriteVariation,
+		spriteCycleTicks = appearance.spriteCycleTicks,
 		size = binder.bindNumber(appearance.size, 0.2f, "appearance.size"),
 		sizeJitter = appearance.sizeJitter,
 		sizeByAge = binder.curve(appearance.sizeByAge, DEFAULT_SIZE),
