@@ -23,6 +23,10 @@ object AdditiveParticles {
 
 	val layer: SingleQuadParticle.Layer = SingleQuadParticle.Layer(true, particleAtlas, pipeline)
 
+	/** alpha 混合强制走半透明层，避免精灵本身被判为不透明时忽略顶点 alpha。 */
+	val translucentLayer: SingleQuadParticle.Layer =
+		SingleQuadParticle.Layer(true, particleAtlas, RenderPipelines.TRANSLUCENT_PARTICLE)
+
 	private var assigned = false
 	private var shaderPackActive = false
 

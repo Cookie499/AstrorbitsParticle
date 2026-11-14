@@ -130,7 +130,13 @@ class EffectParticleGroup(engine: ParticleEngine) : ParticleGroup<Particle>(engi
 			var i = 0
 			while (i < buffer.count) {
 				val sprite = sharedSprite ?: sprites[particleVariant(effect.seed, i, sprites.size)]
-				val layer = if (additive) AdditiveParticles.layerFor(sprite.layer) else sprite.layer
+				val layer = if (additive) {
+					AdditiveParticles.layerFor(sprite.layer)
+				} else if (sprite.layer.translucent) {
+					sprite.layer
+				} else {
+					AdditiveParticles.translucentLayer
+				}
 				val px = (ox + (buffer.x[i] - ox) * scale - cameraPos.x).toFloat()
 				val py = (oy + (buffer.y[i] - oy) * scale - cameraPos.y).toFloat()
 				val pz = (oz + (buffer.z[i] - oz) * scale - cameraPos.z).toFloat()
