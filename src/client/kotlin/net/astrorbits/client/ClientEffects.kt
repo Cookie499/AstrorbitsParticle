@@ -140,6 +140,8 @@ class ClientEffect(
 	private var splashCursor = 0
 	private var splashSerial = 0
 	private val splashInside = BooleanArray(if (splash != null) bound.count else 0)
+	private val splashHidden = BooleanArray(if (splash != null) bound.count else 0)
+	private var splashKeep = BooleanArray(0)
 
 	private var stopped = false
 	private var stopAge = 0f
@@ -278,6 +280,7 @@ class ClientEffect(
 			val slot = if (id in 0 until bound.count) id else 0
 			if (!level.getBlockState(pos).isSolid) {
 				splashInside[slot] = false
+				splashHidden[slot] = false
 				i++
 				continue
 			}
@@ -286,6 +289,7 @@ class ClientEffect(
 				continue
 			}
 			splashInside[slot] = true
+			splashHidden[slot] = true
 			var top = pos
 			var guard = 0
 			while (guard < 4) {
@@ -365,8 +369,22 @@ class ClientEffect(
 	fun sample(gameTime: Long, partialTick: Float): ParticleBuffer {
 		reserveTrailBuffers()
 		sampleInto(buffer, renderCycle, ageAt(gameTime, partialTick), true)
+		hideCollided(buffer)
 		appendSplashes(buffer, gameTime, partialTick)
 		return buffer
+	}
+
+	/** 已碰撞的雨滴和它的轨迹在重新离开固体前不再绘制。 */
+	private fun hideCollided(out: ParticleBuffer) {
+		if (splashHidden.isEmpty()) return
+		if (splashKeep.size < out.count) splashKeep = BooleanArray(maxOf(out.count, splashKeep.size * 2))
+		var i = 0
+		while (i < out.count) {
+			val id = out.ids[i]
+			splashKeep[i] = !(id >= 0 && id < splashHidden.size && splashHidden[id])
+			i++
+		}
+		out.retain(splashKeep)
 	}
 
 	private fun sampleInto(out: ParticleBuffer, cycle: ParticleBuffer, age: Float, withTrail: Boolean) {
