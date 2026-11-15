@@ -9,7 +9,7 @@ import net.minecraft.network.codec.StreamEncoder
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload
 
 /** 协议版本；改动包结构时递增，客户端在连接建立时与服务端比对。 */
-const val PROTOCOL_VERSION = 4
+const val PROTOCOL_VERSION = 5
 
 /** 随机算法版本；改动 [net.astrorbits.math.HashRandom] 或流的取用顺序时递增。 */
 const val RNG_VERSION = 1
@@ -90,7 +90,11 @@ class EffectStartPayload(
 	}
 }
 
-class EffectStopPayload(val effectIds: LongArray) : CustomPacketPayload {
+class EffectStopPayload(
+	val effectIds: LongArray,
+	/** true 停止发射但保留已存在的粒子；false 立即移除。 */
+	val fade: Boolean,
+) : CustomPacketPayload {
 	override fun type(): CustomPacketPayload.Type<EffectStopPayload> = TYPE
 
 	companion object {
@@ -100,10 +104,12 @@ class EffectStopPayload(val effectIds: LongArray) : CustomPacketPayload {
 			StreamEncoder { buf, payload ->
 				buf.writeVarInt(payload.effectIds.size)
 				payload.effectIds.forEach(buf::writeLong)
+				buf.writeBoolean(payload.fade)
 			},
 			StreamDecoder { buf ->
 				val size = buf.readVarInt()
-				EffectStopPayload(LongArray(size) { buf.readLong() })
+				val ids = LongArray(size) { buf.readLong() }
+				EffectStopPayload(ids, buf.readBoolean())
 			},
 		)
 	}

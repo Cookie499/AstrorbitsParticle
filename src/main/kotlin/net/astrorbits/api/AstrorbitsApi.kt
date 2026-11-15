@@ -129,6 +129,10 @@ object AstrorbitsApi {
 	@JvmStatic
 	fun stopAll() = ServerEffects.stopAll()
 
+	/** 立即清空全部特效，不保留已有粒子；与 [stopAll] 的淡出停止不同。 */
+	@JvmStatic
+	fun clear() = ServerEffects.clear()
+
 	@JvmStatic
 	fun activeEffects(): List<EffectInfo> = ServerEffects.list().map {
 		EffectInfo(

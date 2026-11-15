@@ -3,15 +3,13 @@ package net.astrorbits.style
 import net.astrorbits.expr.BoundNumber
 import net.astrorbits.math.HashRandom
 import net.astrorbits.math.Streams
+import net.astrorbits.model.EmissionMode
 import net.minecraft.world.phys.Vec3
 import kotlin.math.PI
 import kotlin.math.sin
 
 object Ambience : ParticleStyle {
 	override val id = "astrorbitsparticle:ambience"
-
-	/** 氛围粒子是常驻场，没有逐周期出生，循环时只按当前相位采样。 */
-	override val cyclicEmission = false
 
 	override val schema = StyleSchema(
 		id, "氛围",
@@ -57,19 +55,35 @@ object Ambience : ParticleStyle {
 		)
 	}
 
+	override fun birthAge(effect: BoundEffect, seed: Long, index: Int): Float {
+		val emission = effect.emission
+		if (emission.mode != EmissionMode.BURST) {
+			return EmissionMath.birth(emission, seed, index, effect.count)
+		}
+		val start = emission.windowStart
+		val end = if (emission.windowEnd > start) emission.windowEnd else effect.duration
+		return start + HashRandom.unit(seed, Streams.TIME, index, 10) * (end - start).coerceAtLeast(0.05f)
+	}
+
 	override fun sample(effect: BoundEffect, origin: Vec3, seed: Long, age: Float, out: ParticleBuffer) {
 		val params = effect.styleParams as Params
-		val life = effect.emission.lifetime
-		val u = (age / life).coerceIn(0f, 1f)
+		val emission = effect.emission
 
 		for (i in 0 until effect.count) {
+			// 氛围粒子默认 burst 也要错开出生，避免整批同时出现；显式 stream/random 时按发射窗口。
+			val birth = birthAge(effect, seed, i)
+			val life = EmissionMath.lifetime(emission, seed, i)
+			val local = age - birth
+			if (local <= 0f || local >= life) continue
+			val u = local / life
+
 			val baseX = (HashRandom.unit(seed, Streams.JITTER, i, 0) - 0.5f) * params.box.x.toFloat()
 			val baseY = (HashRandom.unit(seed, Streams.JITTER, i, 1) - 0.5f) * params.box.y.toFloat()
 			val baseZ = (HashRandom.unit(seed, Streams.JITTER, i, 2) - 0.5f) * params.box.z.toFloat()
 
 			var alphaScale = 1f
 			if (params.flicker) {
-				val gate = StyleMath.fract(HashRandom.unit(seed, Streams.TIME, i) + age * params.flickerRate)
+				val gate = StyleMath.fract(HashRandom.unit(seed, Streams.TIME, i) + local * params.flickerRate)
 				if (gate >= params.visibleFraction) continue
 				alphaScale = StyleMath.smoothstep(0f, 0.08f, gate) *
 					StyleMath.smoothstep(0f, 0.08f, params.visibleFraction - gate)
@@ -86,15 +100,15 @@ object Ambience : ParticleStyle {
 				val p2 = HashRandom.unit(seed, Streams.PHASE, i, 4) * 2.0 * PI
 				val p3 = HashRandom.unit(seed, Streams.PHASE, i, 5) * 2.0 * PI
 				val amp = params.driftAmplitude
-				driftX = amp * sin(2.0 * PI * f1 * age + p1).toFloat()
-				driftY = amp * sin(2.0 * PI * f2 * age + p2).toFloat()
-				driftZ = amp * sin(2.0 * PI * f3 * age + p3).toFloat()
+				driftX = amp * sin(2.0 * PI * f1 * local + p1).toFloat()
+				driftY = amp * sin(2.0 * PI * f2 * local + p2).toFloat()
+				driftZ = amp * sin(2.0 * PI * f3 * local + p3).toFloat()
 			}
 
 			var bob = 0f
 			if (params.bob && params.bobAmplitude != 0f) {
 				val phase = HashRandom.unit(seed, Streams.PHASE, i, 6) * 2.0 * PI
-				bob = params.bobAmplitude * sin(2.0 * PI * age / params.bobPeriod + phase).toFloat()
+				bob = params.bobAmplitude * sin(2.0 * PI * local / params.bobPeriod + phase).toFloat()
 			}
 
 			StyleSupport.emit(

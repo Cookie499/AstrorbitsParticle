@@ -67,7 +67,10 @@ object EffectsCommand {
 									Commands.literal("all").executes { ctx ->
 										val count = ServerEffects.list().size
 										ServerEffects.stopAll()
-										ctx.source.sendSuccess({ Component.literal("已停止 $count 个特效") }, false)
+										ctx.source.sendSuccess(
+											{ Component.literal("已停止 $count 个特效，已有粒子会自然结束") },
+											false,
+										)
 										1
 									},
 								)
@@ -76,7 +79,10 @@ object EffectsCommand {
 										.executes { ctx ->
 											val id = LongArgumentType.getLong(ctx, "id")
 											if (ServerEffects.stop(id)) {
-												ctx.source.sendSuccess({ Component.literal("已停止特效 $id") }, false)
+												ctx.source.sendSuccess(
+													{ Component.literal("已停止特效 $id，已有粒子会自然结束") },
+													false,
+												)
 												1
 											} else {
 												ctx.source.sendFailure(Component.literal("没有 id 为 $id 的特效"))
@@ -84,6 +90,17 @@ object EffectsCommand {
 											}
 										},
 								),
+						)
+						.then(
+							Commands.literal("clear").executes { ctx ->
+								val count = ServerEffects.list().size
+								ServerEffects.clear()
+								ctx.source.sendSuccess(
+									{ Component.literal("已清空 $count 个特效") },
+									false,
+								)
+								1
+							},
 						)
 						.then(
 							Commands.literal("list").executes { ctx ->

@@ -164,7 +164,7 @@ object TestPresets {
 			{
 			  "style": "astrorbitsparticle:ambience",
 			  "duration": 15.0,
-			  "emission": {"count": 160, "lifetime": 15.0, "lifetimeJitter": 0.0},
+			  "emission": {"count": 160, "window": [0.0, 6.0], "lifetime": 15.0, "lifetimeJitter": 0.0},
 			  "physics": {"gravity": 0.0},
 			  "appearance": {
 			    "sprite": "minecraft:glow",

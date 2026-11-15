@@ -47,6 +47,13 @@ interface ParticleStyle {
 	fun particleCapacity(effect: BoundEffect): Int = effect.count
 
 	/**
+	 * 指定发射序号相对当前采样周期的出生时间（秒）。停止发射后客户端用它过滤
+	 * 停止时刻之后才出生的粒子；自定义了出生规则的样式要覆盖。
+	 */
+	fun birthAge(effect: BoundEffect, seed: Long, index: Int): Float =
+		EmissionMath.birth(effect.emission, seed, index, effect.count)
+
+	/**
 	 * 循环播放时是否按周期重新发射一批粒子。
 	 *
 	 * 为 `true` 时客户端会把仍可能存活的更早周期依次采样后追加到同一缓冲区，
@@ -454,6 +461,31 @@ class ParticleBuffer {
 		System.arraycopy(other.argb, 0, argb, start, other.count)
 		System.arraycopy(other.ids, 0, ids, start, other.count)
 		count = total
+	}
+
+	/**
+	 * 原地保留 `keep[i]` 为 true 的粒子，其余丢弃。`keep` 长度至少要等于 [count]。
+	 * 用于停止发射后过滤掉停止时刻之后才出生的粒子。
+	 */
+	fun retain(keep: BooleanArray) {
+		var write = 0
+		var i = 0
+		while (i < count) {
+			if (keep[i]) {
+				if (write != i) {
+					x[write] = x[i]
+					y[write] = y[i]
+					z[write] = z[i]
+					size[write] = size[i]
+					alpha[write] = alpha[i]
+					argb[write] = argb[i]
+					ids[write] = ids[i]
+				}
+				write++
+			}
+			i++
+		}
+		count = write
 	}
 
 	fun push(px: Float, py: Float, pz: Float, pSize: Float, pAlpha: Float, color: Int) {

@@ -190,7 +190,7 @@ object ServerEffects {
 		val effect = effects.remove(id) ?: return false
 		particleEnds.remove(id)
 		val level = server?.getLevel(effect.dimension) ?: return true
-		val payload = EffectStopPayload(longArrayOf(id))
+		val payload = EffectStopPayload(longArrayOf(id), true)
 		for (uuid in effect.subscribers) {
 			level.server.playerList.players.firstOrNull { it.uuid == uuid }?.let {
 				ServerPlayNetworking.send(it, payload)
@@ -204,7 +204,7 @@ object ServerEffects {
 		if (ids.isEmpty()) return
 		effects.clear()
 		particleEnds.clear()
-		val payload = EffectStopPayload(ids)
+		val payload = EffectStopPayload(ids, true)
 		server?.playerList?.players?.forEach { ServerPlayNetworking.send(it, payload) }
 	}
 
@@ -252,11 +252,18 @@ object ServerEffects {
 
 	fun findDefinition(id: Identifier): EffectDefinition? = definitions[id]
 
+	/** 立即清空服务端与客户端的全部特效，并让客户端丢弃定义缓存；下次启动会重发定义。 */
+	fun clear() {
+		effects.clear()
+		particleEnds.clear()
+		sentDefinitions.clear()
+		server?.playerList?.players?.forEach { ServerPlayNetworking.send(it, EffectClearPayload()) }
+	}
+
 	fun reload() {
 		net.astrorbits.config.ModConfig.load()
 		loadConfig()
-		stopAll()
-		server?.playerList?.players?.forEach { ServerPlayNetworking.send(it, EffectClearPayload()) }
+		clear()
 	}
 
 	/**
@@ -404,7 +411,7 @@ object ServerEffects {
 			if (effect.endTick == Long.MAX_VALUE || now < effect.endTick) continue
 			iterator.remove()
 			particleEnds.remove(effect.id)
-			val payload = EffectStopPayload(longArrayOf(effect.id))
+			val payload = EffectStopPayload(longArrayOf(effect.id), false)
 			for (uuid in effect.subscribers) {
 				server.playerList.players.firstOrNull { it.uuid == uuid }?.let {
 					ServerPlayNetworking.send(it, payload)
@@ -435,7 +442,7 @@ object ServerEffects {
 					effect.subscribers += player.uuid
 				} else if (!eligible && subscribed) {
 					effect.subscribers -= player.uuid
-					ServerPlayNetworking.send(player, EffectStopPayload(longArrayOf(effect.id)))
+					ServerPlayNetworking.send(player, EffectStopPayload(longArrayOf(effect.id), false))
 				}
 			}
 		}

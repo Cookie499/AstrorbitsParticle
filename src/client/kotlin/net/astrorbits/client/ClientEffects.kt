@@ -121,6 +121,19 @@ class ClientEffect(
 	private val trailOffset = FloatArray(3)
 	private var trailReserved = false
 
+	private var stopped = false
+	private var stopAge = 0f
+	private var stopScaled = 0f
+	private var stopCycle = 0L
+	private var stopPhase = 0f
+	private var stopContinuation = 0f
+	private var birthKeep = BooleanArray(0)
+
+	/** 停止发射后最多还要等多久，取粒子寿命上界按播放速度换算回墙钟时间。 */
+	private val stopTail: Float = (
+		bound.emission.lifetime * (1f + abs(bound.emission.lifetimeJitter))
+		).coerceAtLeast(0.05f) / abs(playScale).coerceAtLeast(0.01f)
+
 	init {
 		var size = 1f
 		var alpha = 1f
@@ -176,7 +189,38 @@ class ClientEffect(
 	fun ageAt(gameTime: Long, partialTick: Float): Float =
 		baseAge + ((gameTime - startGameTime).coerceAtLeast(0L) + partialTick) / 20f
 
-	fun expired(gameTime: Long): Boolean = !bound.definition.loop && ageAt(gameTime, 0f) >= bound.duration
+	/**
+	 * 停止发射：当前年龄之后的出生被过滤，已有粒子按各自寿命继续运行。
+	 * 循环特效固定在停止时的周期，不再进入新周期。
+	 */
+	fun stop(gameTime: Long) {
+		if (stopped) return
+		stopped = true
+		stopAge = ageAt(gameTime, 0f)
+		stopScaled = stopAge * playScale
+		val duration = bound.duration
+		if (bound.definition.loop && cyclesForward && playScale > 0f) {
+			stopCycle = floor(stopScaled / duration).toLong()
+			stopPhase = stopScaled - stopCycle * duration
+		} else if (bound.definition.loop) {
+			val wrapped = stopScaled % duration
+			stopPhase = if (wrapped < 0f) wrapped + duration else wrapped
+			stopContinuation = stopPhase
+		} else {
+			stopPhase = if (playScale < 0f) {
+				(duration + stopScaled).coerceIn(0f, duration)
+			} else {
+				stopScaled
+			}
+			stopContinuation = stopPhase
+		}
+	}
+
+	fun expired(gameTime: Long): Boolean {
+		val age = ageAt(gameTime, 0f)
+		if (stopped) return age >= stopAge + stopTail
+		return !bound.definition.loop && age >= bound.duration
+	}
 
 	fun sample(gameTime: Long, partialTick: Float): ParticleBuffer {
 		reserveTrailBuffers()
@@ -185,8 +229,12 @@ class ClientEffect(
 	}
 
 	private fun sampleInto(out: ParticleBuffer, cycle: ParticleBuffer, age: Float, withTrail: Boolean) {
-		sampleRawInto(out, cycle, age)
-		if (withTrail) appendTrails(out, age)
+		if (stopped) {
+			sampleStoppedInto(out, cycle, age)
+		} else {
+			sampleRawInto(out, cycle, age)
+		}
+		if (withTrail && !stopped) appendTrails(out, age)
 		if (rotates) rotate(out)
 	}
 
@@ -221,6 +269,55 @@ class ClientEffect(
 			bound.style.sample(bound, origin, seed, phase + back * bound.duration, cycle)
 			out.append(cycle)
 		}
+	}
+
+	/**
+	 * 停止后的采样：循环特效只保留停止时周期及更早的存活粒子，不再进入新周期；
+	 * 非循环特效按停止时刻的采样年龄继续推进，并过滤停止后才出生的粒子。
+	 */
+	private fun sampleStoppedInto(out: ParticleBuffer, cycle: ParticleBuffer, age: Float) {
+		val scaled = age * playScale
+		out.reset(sourceMaxParticles)
+		if (bound.definition.loop && cyclesForward && playScale > 0f) {
+			var cycleIndex = stopCycle
+			val oldest = (stopCycle - loopLookback.toLong()).coerceAtLeast(0L)
+			while (cycleIndex >= oldest) {
+				val sampleAge = scaled - cycleIndex * bound.duration
+				cycle.reset(sourcePerCycle)
+				bound.style.sample(bound, origin, seed, sampleAge, cycle)
+				retainBirths(cycle, if (cycleIndex == stopCycle) stopPhase else Float.POSITIVE_INFINITY)
+				out.append(cycle)
+				cycleIndex--
+			}
+			return
+		}
+		val sampleAge = stopContinuation + (age - stopAge) * playScale
+		cycle.reset(sourcePerCycle)
+		bound.style.sample(bound, origin, seed, sampleAge, cycle)
+		val cutoff = when {
+			bound.definition.loop -> stopPhase
+			playScale >= 0f -> stopPhase
+			else -> Float.POSITIVE_INFINITY
+		}
+		retainBirths(cycle, cutoff)
+		out.append(cycle)
+	}
+
+	/** 丢弃出生时间晚于 [cutoff] 的粒子；id 超出 count 时按发射序号 0 处理。 */
+	private fun retainBirths(hist: ParticleBuffer, cutoff: Float) {
+		if (cutoff == Float.POSITIVE_INFINITY) return
+		if (birthKeep.size < hist.count) {
+			birthKeep = BooleanArray(maxOf(hist.count, birthKeep.size * 2))
+		}
+		var i = 0
+		while (i < hist.count) {
+			val id = hist.ids[i]
+			val index = if (id in 0 until bound.count) id else 0
+			val birth = bound.style.birthAge(bound, seed, index)
+			birthKeep[i] = birth <= cutoff + 1e-4f
+			i++
+		}
+		hist.retain(birthKeep)
 	}
 
 	/** 预分配轨迹缓冲，避免逐帧扩容；关闭轨迹时不占额外内存。 */
@@ -627,7 +724,16 @@ object ClientEffects {
 	}
 
 	fun stop(payload: EffectStopPayload) {
-		payload.effectIds.forEach(active::remove)
+		if (!payload.fade) {
+			payload.effectIds.forEach(active::remove)
+			return
+		}
+		val gameTime = Minecraft.getInstance().level?.gameTime
+		if (gameTime == null) {
+			payload.effectIds.forEach(active::remove)
+			return
+		}
+		payload.effectIds.forEach { active[it]?.stop(gameTime) }
 	}
 
 	fun clear(payload: EffectClearPayload) {
