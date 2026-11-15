@@ -79,6 +79,23 @@ data class Trail(
 	}
 }
 
+/**
+ * 地面碰撞溅射：客户端检测到源粒子进入固体方块时，在该方块顶面生成一小簇粒子。
+ * 只影响客户端画面，不触发服务端子特效。
+ */
+data class Splash(
+	/** 溅射颜色，缺省金色。 */
+	val color: JsonElement? = null,
+	/** 每次碰撞生成的粒子数。 */
+	val count: Int = 4,
+	/** 单颗溅射面片边长（块）。 */
+	val size: Float = 0.12f,
+	/** 水平/向上的初速度（块/秒）。 */
+	val speed: Float = 1.2f,
+	/** 溅射粒子寿命（秒）。 */
+	val life: Float = 0.45f,
+)
+
 /** 子特效触发方式：定义结束、单个粒子消失，或客户端报告粒子碰撞。 */
 enum class SubEffectTrigger {
 	END, IMPACT, PARTICLE_END;
@@ -160,6 +177,7 @@ data class EffectDefinition(
 	val physics: Physics,
 	val appearance: Appearance,
 	val trail: Trail?,
+	val splash: Splash?,
 	val visibility: Visibility,
 	val params: JsonObject,
 	val source: String,
@@ -191,12 +209,13 @@ data class EffectDefinition(
 			val physics = obj.objectOrNull("physics")?.let(::parsePhysics) ?: Physics()
 			val appearance = obj.objectOrNull("appearance")?.let(::parseAppearance) ?: Appearance()
 			val trail = obj.objectOrNull("trail")?.let(::parseTrail)
+			val splash = obj.objectOrNull("splash")?.let(::parseSplash)
 			val visibility = obj.objectOrNull("visibility")?.let(::parseVisibility) ?: Visibility()
 			val params = obj.objectOrNull("params") ?: JsonObject()
 
 			EffectDefinition(
 				style, duration, loop, orientation, reverse, timeScale, subEffect, subEffectTrigger,
-				emission, physics, appearance, trail, visibility, params, json,
+				emission, physics, appearance, trail, splash, visibility, params, json,
 			)
 		}
 
@@ -251,6 +270,17 @@ data class EffectDefinition(
 				sizeScale = obj.float("sizeScale", 0.8f).coerceIn(0f, 1f),
 				alphaScale = obj.float("alphaScale", 0.7f).coerceIn(0f, 1f),
 				color = obj.get("color"),
+			)
+		}
+
+		private fun parseSplash(obj: JsonObject): Splash? {
+			if (!obj.bool("enabled", true)) return null
+			return Splash(
+				color = obj.get("color"),
+				count = obj.int("count", 4).coerceIn(1, 16),
+				size = obj.float("size", 0.12f).coerceIn(0.01f, 1f),
+				speed = obj.float("speed", 1.2f).coerceIn(0f, 8f),
+				life = obj.float("life", 0.45f).coerceIn(0.05f, 3f),
 			)
 		}
 

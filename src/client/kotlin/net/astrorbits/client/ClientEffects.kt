@@ -42,6 +42,11 @@ private const val MAX_LOOP_LOOKBACK = 8
 /** 单特效轨迹粒子硬上限；超出时截断较早的段，避免一帧写出几十万颗粒子。 */
 private const val MAX_TRAIL_PARTICLES = 16384
 
+/** 单个特效同时存在的溅射粒子上限；超出时环形覆盖最早的粒子。 */
+private const val MAX_SPLASH_PARTICLES = 512
+
+private const val SPLASH_GRAVITY = -6f
+
 /** 轨迹扩散用 JITTER 流的高位 draw，避开样式自己的随机取用。 */
 private const val TRAIL_SPREAD_DRAW = 1000
 
@@ -121,6 +126,21 @@ class ClientEffect(
 	private val trailOffset = FloatArray(3)
 	private var trailReserved = false
 
+	private val splash = bound.splash
+	private val splashSample = ParticleBuffer()
+	private val splashCycle = ParticleBuffer()
+	private val splashX = FloatArray(if (splash != null) MAX_SPLASH_PARTICLES else 0)
+	private val splashY = FloatArray(if (splash != null) MAX_SPLASH_PARTICLES else 0)
+	private val splashZ = FloatArray(if (splash != null) MAX_SPLASH_PARTICLES else 0)
+	private val splashVX = FloatArray(if (splash != null) MAX_SPLASH_PARTICLES else 0)
+	private val splashVY = FloatArray(if (splash != null) MAX_SPLASH_PARTICLES else 0)
+	private val splashVZ = FloatArray(if (splash != null) MAX_SPLASH_PARTICLES else 0)
+	private val splashSpawn = LongArray(if (splash != null) MAX_SPLASH_PARTICLES else 0)
+	private val splashActive = BooleanArray(if (splash != null) MAX_SPLASH_PARTICLES else 0)
+	private var splashCursor = 0
+	private var splashSerial = 0
+	private val splashInside = BooleanArray(if (splash != null) bound.count else 0)
+
 	private var stopped = false
 	private var stopAge = 0f
 	private var stopScaled = 0f
@@ -129,16 +149,18 @@ class ClientEffect(
 	private var stopContinuation = 0f
 	private var birthKeep = BooleanArray(0)
 
-	/** 停止发射后最多还要等多久：取粒子寿命上界加轨迹段的时间跨度。 */
+	/** 停止发射后最多还要等多久：取粒子寿命上界、轨迹跨度与溅射寿命。 */
 	private val stopTail: Float = run {
 		val trailSpan = if (trail != null && trail.mode == TrailMode.TIME) {
 			trailCap * trail.interval
 		} else {
 			0f
 		}
+		val splashSpan = splash?.life ?: 0f
 		(bound.emission.lifetime * (1f + abs(bound.emission.lifetimeJitter)))
 			.coerceAtLeast(0.05f)
 			.plus(trailSpan)
+			.plus(splashSpan)
 			.div(abs(playScale).coerceAtLeast(0.01f))
 	}
 
@@ -155,7 +177,8 @@ class ClientEffect(
 	}
 
 	/** 单帧最多产出的粒子数（含轨迹），缓冲区容量与客户端渲染预算都按它估算。 */
-	val maxParticles: Int = sourceMaxParticles + trailMaxParticles
+	val maxParticles: Int = sourceMaxParticles + trailMaxParticles +
+		if (splash != null) MAX_SPLASH_PARTICLES else 0
 
 	/** `orientation=view` 且触发时带方向时才旋转，避免世界朝向的特效多算一遍。 */
 	private val rotates: Boolean = bound.definition.orientation == Orientation.VIEW &&
@@ -235,9 +258,114 @@ class ClientEffect(
 		return false
 	}
 
+	/** 客户端 tick：采样源粒子，检测进入固体方块的事件并在方块顶面生成溅射。 */
+	fun tickSplash(level: ClientLevel) {
+		if (splash == null || stopped) return
+		val gameTime = level.gameTime
+		sampleRawInto(splashSample, splashCycle, ageAt(gameTime, 0f))
+		val scaleFactor = if (abs(scale) > 1e-4f) scale else 1f
+		var i = 0
+		while (i < splashSample.count) {
+			val wx = origin.x + (splashSample.x[i] - origin.x.toFloat()) * scaleFactor
+			val wy = origin.y + (splashSample.y[i] - origin.y.toFloat()) * scaleFactor
+			val wz = origin.z + (splashSample.z[i] - origin.z.toFloat()) * scaleFactor
+			val pos = BlockPos.containing(wx, wy, wz)
+			if (!level.isLoaded(pos)) {
+				i++
+				continue
+			}
+			val id = splashSample.ids[i]
+			val slot = if (id in 0 until bound.count) id else 0
+			if (!level.getBlockState(pos).isSolid) {
+				splashInside[slot] = false
+				i++
+				continue
+			}
+			if (splashInside[slot]) {
+				i++
+				continue
+			}
+			splashInside[slot] = true
+			var top = pos
+			var guard = 0
+			while (guard < 4) {
+				val above = top.above()
+				if (!level.getBlockState(above).isSolid) break
+				top = above
+				guard++
+			}
+			spawnSplash(
+				top.x + 0.5, top.y + 1.0, top.z + 0.5,
+				gameTime, scaleFactor,
+			)
+			i++
+		}
+	}
+
+	private fun spawnSplash(
+		worldX: Double,
+		worldY: Double,
+		worldZ: Double,
+		gameTime: Long,
+		scaleFactor: Float,
+	) {
+		val splash = splash ?: return
+		val localX = origin.x + (worldX - origin.x) / scaleFactor
+		val localY = origin.y + (worldY - origin.y) / scaleFactor
+		val localZ = origin.z + (worldZ - origin.z) / scaleFactor
+		val serial = splashSerial++
+		var n = 0
+		while (n < splash.count) {
+			val angle = HashRandom.unit(seed, Streams.JITTER, serial, n * 4) * 2.0 * Math.PI
+			val radial = splash.speed * (0.35f + 0.65f * HashRandom.unit(seed, Streams.JITTER, serial, n * 4 + 1))
+			val up = splash.speed * (0.9f + 0.7f * HashRandom.unit(seed, Streams.JITTER, serial, n * 4 + 2))
+			val slot = splashCursor
+			splashCursor = (splashCursor + 1) % MAX_SPLASH_PARTICLES
+			splashX[slot] = (localX + cos(angle) * 0.05).toFloat()
+			splashY[slot] = localY.toFloat()
+			splashZ[slot] = (localZ + sin(angle) * 0.05).toFloat()
+			splashVX[slot] = (cos(angle) * radial / scaleFactor).toFloat()
+			splashVY[slot] = up / scaleFactor
+			splashVZ[slot] = (sin(angle) * radial / scaleFactor).toFloat()
+			splashSpawn[slot] = gameTime
+			splashActive[slot] = true
+			n++
+		}
+	}
+
+	private fun appendSplashes(out: ParticleBuffer, gameTime: Long, partialTick: Float) {
+		val splash = splash ?: return
+		val now = gameTime + partialTick
+		var slot = 0
+		while (slot < MAX_SPLASH_PARTICLES) {
+			if (!splashActive[slot]) {
+				slot++
+				continue
+			}
+			val age = (now - splashSpawn[slot]) / 20f
+			if (age < 0f || age >= splash.life) {
+				splashActive[slot] = false
+				slot++
+				continue
+			}
+			val alpha = (1f - age / splash.life).coerceIn(0f, 1f)
+			out.push(
+				splashX[slot] + splashVX[slot] * age,
+				splashY[slot] + splashVY[slot] * age + 0.5f * SPLASH_GRAVITY * age * age,
+				splashZ[slot] + splashVZ[slot] * age,
+				splash.size * (1f - 0.25f * age / splash.life),
+				alpha,
+				colorWithAlpha(splash.color, alpha),
+				-1,
+			)
+			slot++
+		}
+	}
+
 	fun sample(gameTime: Long, partialTick: Float): ParticleBuffer {
 		reserveTrailBuffers()
 		sampleInto(buffer, renderCycle, ageAt(gameTime, partialTick), true)
+		appendSplashes(buffer, gameTime, partialTick)
 		return buffer
 	}
 
@@ -335,11 +463,18 @@ class ClientEffect(
 
 	/** 预分配轨迹缓冲，避免逐帧扩容；关闭轨迹时不占额外内存。 */
 	private fun reserveTrailBuffers() {
-		if (trailReserved || trailCap == 0) return
+		if (trailReserved) return
+		if (trailCap == 0 && splash == null) return
 		buffer.reserve(maxParticles)
 		renderCycle.reserve(sourceMaxParticles)
-		trailScratch.reserve(sourceMaxParticles)
-		trailCycle.reserve(sourcePerCycle)
+		if (trailCap > 0) {
+			trailScratch.reserve(sourceMaxParticles)
+			trailCycle.reserve(sourcePerCycle)
+		}
+		if (splash != null) {
+			splashSample.reserve(sourceMaxParticles)
+			splashCycle.reserve(sourcePerCycle)
+		}
 		trailReserved = true
 	}
 
@@ -877,6 +1012,7 @@ object ClientEffects {
 		val level = Minecraft.getInstance().level ?: return
 		active.values.removeIf { it.expired(level.gameTime) }
 		for (effect in active.values) {
+			effect.tickSplash(level)
 			val definition = effect.bound.definition
 			if (definition.subEffect == null || definition.subEffectTrigger != SubEffectTrigger.IMPACT) continue
 			if (!ClientPlayNetworking.canSend(EffectImpactPayload.TYPE)) continue

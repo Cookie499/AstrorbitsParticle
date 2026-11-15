@@ -241,6 +241,14 @@ class Binder(
 	}
 }
 
+class BoundSplash(
+	val color: Int,
+	val count: Int,
+	val size: Float,
+	val speed: Float,
+	val life: Float,
+)
+
 class BoundEffect(
 	val definition: EffectDefinition,
 	val style: ParticleStyle,
@@ -253,11 +261,12 @@ class BoundEffect(
 	val trail: Trail?,
 	/** 轨迹 RGB；0 表示继承 appearance.color。 */
 	val trailColor: Int,
+	val splash: BoundSplash?,
 ) {
 	/** 采样各年龄的粒子位置，取最大距离外扩 1 格，避免飞得远的样式被提前剔除。 */
 	fun withLifetime(lifetime: Float): BoundEffect = BoundEffect(
 		definition, style, count, duration, emission.copy(lifetime = lifetime),
-		appearance, physics, styleParams, trail, trailColor,
+		appearance, physics, styleParams, trail, trailColor, splash,
 	)
 
 	val radius: Float = boundsRadius()
@@ -326,6 +335,15 @@ object EffectBinder {
 			styleParams = styleParams,
 			trail = definition.trail,
 			trailColor = definition.trail?.color?.let { parseColor(it, 0) } ?: 0,
+			splash = definition.splash?.let {
+				BoundSplash(
+					color = it.color?.let { color -> parseColor(color, 0xFFFFC84D.toInt()) } ?: 0xFFFFC84D.toInt(),
+					count = it.count,
+					size = it.size,
+					speed = it.speed,
+					life = it.life,
+				)
+			},
 		)
 	}
 
