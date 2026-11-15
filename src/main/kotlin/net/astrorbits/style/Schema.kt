@@ -115,6 +115,7 @@ val COMMON_SCHEMA: StyleSchema = StyleSchema(
 		numSpec("trail.lag", 1f, "distance 模式最长回溯时间（秒），决定能追上多少段", "0.01..16", 0.01f, 16f),
 		intSpec("trail.cap", 8, "最多几段（不含源粒子）；单特效轨迹总数另受渲染预算限制", "1..32", 1f, 32f),
 		numSpec("trail.spread", 0f, "第 k 段相对源粒子的横向随机偏移半径（块），取 spread * k / cap", "0..8", 0f, 8f),
+		numSpec("trail.drift", 0f, "轨迹粒子沿随机方向的飘散速度（块/秒），0 时沿历史路径跟随", "0..16", 0f, 16f),
 		numSpec("trail.sizeScale", 0.8f, "逐段尺寸倍率，第 k 段乘 sizeScale^k", "0..1", 0f, 1f),
 		numSpec("trail.alphaScale", 0.7f, "逐段不透明度倍率，第 k 段乘 alphaScale^k", "0..1", 0f, 1f),
 		colorSpec("trail.color", "轨迹粒子颜色，缺省继承 appearance.color；alpha 仍按段衰减"),

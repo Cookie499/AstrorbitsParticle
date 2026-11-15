@@ -65,6 +65,8 @@ data class Trail(
 	val cap: Int = 8,
 	/** 第 k 段相对源粒子的横向随机偏移半径（块），取 spread * k / cap。 */
 	val spread: Float = 0f,
+	/** 轨迹粒子沿随机方向的飘散速度（块/秒）；0 时沿历史路径跟随。 */
+	val drift: Float = 0f,
 	/** 逐段尺寸倍率，第 k 段乘 sizeScale^k。 */
 	val sizeScale: Float = 0.8f,
 	/** 逐段不透明度倍率，第 k 段乘 alphaScale^k。 */
@@ -245,6 +247,7 @@ data class EffectDefinition(
 				lag = obj.float("lag", 1f).coerceIn(0.01f, 16f),
 				cap = obj.int("cap", 8).coerceIn(1, Trail.MAX_CAP),
 				spread = obj.float("spread", 0f).coerceIn(0f, 8f),
+				drift = obj.float("drift", 0f).coerceIn(0f, 16f),
 				sizeScale = obj.float("sizeScale", 0.8f).coerceIn(0f, 1f),
 				alphaScale = obj.float("alphaScale", 0.7f).coerceIn(0f, 1f),
 				color = obj.get("color"),

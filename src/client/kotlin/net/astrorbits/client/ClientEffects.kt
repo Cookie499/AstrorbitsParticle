@@ -347,6 +347,10 @@ class ClientEffect(
 	/** 时间模式：按 age - k*interval 逐段采样，位置取自历史时刻。 */
 	private fun appendTimeTrails(out: ParticleBuffer, age: Float, sourceCount: Int, limit: Int) {
 		val trail = trail ?: return
+		if (trail.drift > 0f) {
+			appendDriftingTrails(out, age, sourceCount, limit)
+			return
+		}
 		if (trail.spread > 0f) indexSource(out, sourceCount)
 		var segment = 1
 		while (segment <= trailCap) {
@@ -364,6 +368,89 @@ class ClientEffect(
 			}
 			segment++
 		}
+	}
+
+	/**
+	 * 有 `drift` 时按固定发射时刻取历史位置：轨迹粒子出生后不再跟随源粒子速度，
+	 * 而是沿各自的随机方向按 `drift` 飘散。事件按 `interval` 对齐，旧事件逐渐长大并消失。
+	 */
+	private fun appendDriftingTrails(out: ParticleBuffer, age: Float, sourceCount: Int, limit: Int) {
+		val trail = trail ?: return
+		val step = trail.interval
+		if (step <= 0f) return
+		val latest = floor((age / step + 1e-4f).toDouble()).toLong()
+		val oldest = (latest - trailCap + 1L).coerceAtLeast(0L)
+		var eventId = latest
+		while (eventId >= oldest && out.count < limit) {
+			val eventAge = age - eventId * step
+			val segment = ((eventAge / step).toInt() + 1).coerceIn(1, trailCap)
+			sampleRawInto(trailScratch, trailCycle, eventId * step)
+			if (trailScratch.count > 0) {
+				val stride = ((trailScratch.count + sourceCount - 1) / sourceCount).coerceAtLeast(1)
+				appendDriftSegment(
+					out, trailScratch, eventId, eventAge, segment, stride, limit,
+				)
+				if (out.count >= limit) break
+			}
+			eventId--
+		}
+	}
+
+	private fun appendDriftSegment(
+		out: ParticleBuffer,
+		hist: ParticleBuffer,
+		eventId: Long,
+		eventAge: Float,
+		segment: Int,
+		stride: Int,
+		limit: Int,
+	) {
+		val trail = trail ?: return
+		val sizeScale = trailSizeMul[segment]
+		val alphaScale = trailAlphaMul[segment]
+		val spreadRadius = trail.spread * (eventAge / (trailCap * trail.interval)).coerceIn(0f, 1f)
+		val driftRadius = trail.drift * eventAge
+		val eventKey = (eventId xor (eventId ushr 32)).toInt()
+		var i = 0
+		while (i < hist.count && out.count < limit) {
+			val alpha = hist.alpha[i] * alphaScale
+			if (alpha > 0.004f) {
+				val id = hist.ids[i]
+				val key = id xor eventKey
+				driftDirection(key)
+				val radius = spreadRadius + driftRadius
+				out.push(
+					hist.x[i] + trailOffset[0] * radius,
+					hist.y[i] + trailOffset[1] * radius,
+					hist.z[i] + trailOffset[2] * radius,
+					hist.size[i] * sizeScale,
+					alpha,
+					colorWithAlpha(trailColorOr(hist.argb[i]), alpha),
+					id,
+				)
+			}
+			i += stride
+		}
+	}
+
+	/** 按 (粒子 id, 发射时刻) 生成稳定的随机飘散方向，写入 [trailOffset]。 */
+	private fun driftDirection(key: Int) {
+		var dx = HashRandom.signed(seed, Streams.JITTER, key, 3000)
+		var dy = HashRandom.signed(seed, Streams.JITTER, key, 3001)
+		var dz = HashRandom.signed(seed, Streams.JITTER, key, 3002)
+		val length = sqrt(dx * dx + dy * dy + dz * dz)
+		if (length < 1e-4f) {
+			dx = 0f
+			dy = 1f
+			dz = 0f
+		} else {
+			dx /= length
+			dy /= length
+			dz /= length
+		}
+		trailOffset[0] = dx
+		trailOffset[1] = dy
+		trailOffset[2] = dz
 	}
 
 	/**
