@@ -97,6 +97,9 @@ class ClientEffect(
 
 	private val trail: Trail? = bound.trail
 
+	/** 轨迹 RGB；0 表示沿用历史采样里的颜色。 */
+	private val trailColor: Int = bound.trailColor
+
 	/** 请求的轨迹段数；单特效轨迹总量超过 [MAX_TRAIL_PARTICLES] 时从较早的段截断。 */
 	private val trailCap: Int = trail?.cap ?: 0
 
@@ -353,7 +356,7 @@ class ClientEffect(
 									px + ox, py + oy, pz + oz,
 									trailScratch.size[i] * trailSizeMul[segment + 1],
 									alpha,
-									colorWithAlpha(trailScratch.argb[i], alpha),
+									colorWithAlpha(trailColorOr(trailScratch.argb[i]), alpha),
 									id,
 								)
 							}
@@ -407,7 +410,7 @@ class ClientEffect(
 				}
 				out.push(
 					px, py, pz, hist.size[i] * sizeScale, alpha,
-					colorWithAlpha(hist.argb[i], alpha), hist.ids[i],
+					colorWithAlpha(trailColorOr(hist.argb[i]), alpha), hist.ids[i],
 				)
 			}
 			i += stride
@@ -495,6 +498,10 @@ class ClientEffect(
 
 	private fun cycleIndex(age: Float): Long =
 		if (!bound.definition.loop) 0L else floor(age * playScale / bound.duration.toDouble()).toLong()
+
+	/** 轨迹指定了独立的 RGB 时覆盖历史采样颜色；alpha 仍由段衰减决定。 */
+	private fun trailColorOr(source: Int): Int =
+		if (trailColor == 0) source else (trailColor and 0x00FFFFFF) or (0xFF shl 24)
 
 	private fun colorWithAlpha(argb: Int, alpha: Float): Int {
 		val byte = (alpha.coerceIn(0f, 1f) * 255f).toInt()

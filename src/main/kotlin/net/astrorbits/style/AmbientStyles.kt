@@ -5,8 +5,6 @@ import net.astrorbits.math.HashRandom
 import net.astrorbits.math.Streams
 import net.minecraft.world.phys.Vec3
 import kotlin.math.PI
-import kotlin.math.abs
-import kotlin.math.floor
 import kotlin.math.sin
 
 object Ambience : ParticleStyle {
@@ -156,7 +154,9 @@ object Rain : ParticleStyle {
 	override fun sample(effect: BoundEffect, origin: Vec3, seed: Long, age: Float, out: ParticleBuffer) {
 		val params = effect.styleParams as Params
 		val dir = if (params.direction.lengthSqr() < 1e-9) Vec3(0.0, -1.0, 0.0) else params.direction.normalize()
-		val extent = (abs(dir.x) * params.area.x + abs(dir.y) * params.area.y + abs(dir.z) * params.area.z).toFloat()
+		val areaX = params.area.x.toFloat()
+		val areaY = params.area.y.toFloat()
+		val areaZ = params.area.z.toFloat()
 		val perDrop = 1 + params.trailCount
 
 		for (drop in 0 until effect.count) {
@@ -165,14 +165,21 @@ object Rain : ParticleStyle {
 			if (local <= 0f || local >= life) continue
 
 			val speed = params.speedMin + (params.speedMax - params.speedMin) * HashRandom.unit(seed, Streams.SPEED, drop)
-			val along = speed * age + HashRandom.unit(seed, Streams.TIME, drop) * extent
-			var x = (origin.x + dir.x * along).toFloat()
-			var y = (origin.y + dir.y * along).toFloat()
-			var z = (origin.z + dir.z * along).toFloat()
+			// 在体积内取随机起点，再按各自存活时间下落；wrap 让雨幕持续循环。
+			val fall = speed * local
+			var x = origin.x.toFloat() +
+				(HashRandom.unit(seed, Streams.JITTER, drop, 100) - 0.5f) * areaX +
+				dir.x.toFloat() * fall
+			var y = origin.y.toFloat() +
+				(HashRandom.unit(seed, Streams.JITTER, drop, 101) - 0.5f) * areaY +
+				dir.y.toFloat() * fall
+			var z = origin.z.toFloat() +
+				(HashRandom.unit(seed, Streams.JITTER, drop, 102) - 0.5f) * areaZ +
+				dir.z.toFloat() * fall
 			if (params.wrap) {
-				x = wrap(x, origin.x.toFloat(), params.area.x.toFloat())
-				y = wrap(y, origin.y.toFloat(), params.area.y.toFloat())
-				z = wrap(z, origin.z.toFloat(), params.area.z.toFloat())
+				x = wrap(x, origin.x.toFloat(), areaX)
+				y = wrap(y, origin.y.toFloat(), areaY)
+				z = wrap(z, origin.z.toFloat(), areaZ)
 			}
 
 			for (segment in 0 until perDrop) {

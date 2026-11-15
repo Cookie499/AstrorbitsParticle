@@ -244,11 +244,13 @@ class BoundEffect(
 	val physics: Physics,
 	val styleParams: BoundStyle,
 	val trail: Trail?,
+	/** 轨迹 RGB；0 表示继承 appearance.color。 */
+	val trailColor: Int,
 ) {
 	/** 采样各年龄的粒子位置，取最大距离外扩 1 格，避免飞得远的样式被提前剔除。 */
 	fun withLifetime(lifetime: Float): BoundEffect = BoundEffect(
 		definition, style, count, duration, emission.copy(lifetime = lifetime),
-		appearance, physics, styleParams, trail,
+		appearance, physics, styleParams, trail, trailColor,
 	)
 
 	val radius: Float = boundsRadius()
@@ -316,6 +318,7 @@ object EffectBinder {
 			physics = definition.physics,
 			styleParams = styleParams,
 			trail = definition.trail,
+			trailColor = definition.trail?.color?.let { parseColor(it, 0) } ?: 0,
 		)
 	}
 

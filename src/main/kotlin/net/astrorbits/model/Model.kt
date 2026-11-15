@@ -69,6 +69,8 @@ data class Trail(
 	val sizeScale: Float = 0.8f,
 	/** 逐段不透明度倍率，第 k 段乘 alphaScale^k。 */
 	val alphaScale: Float = 0.7f,
+	/** 轨迹颜色；null 继承 `appearance.color`，否则覆盖 RGB、alpha 仍按段衰减。 */
+	val color: JsonElement? = null,
 ) {
 	companion object {
 		const val MAX_CAP = 32
@@ -245,6 +247,7 @@ data class EffectDefinition(
 				spread = obj.float("spread", 0f).coerceIn(0f, 8f),
 				sizeScale = obj.float("sizeScale", 0.8f).coerceIn(0f, 1f),
 				alphaScale = obj.float("alphaScale", 0.7f).coerceIn(0f, 1f),
+				color = obj.get("color"),
 			)
 		}
 
