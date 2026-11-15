@@ -369,12 +369,11 @@ class ClientEffect(
 	fun sample(gameTime: Long, partialTick: Float): ParticleBuffer {
 		reserveTrailBuffers()
 		sampleInto(buffer, renderCycle, ageAt(gameTime, partialTick), true)
-		hideCollided(buffer)
 		appendSplashes(buffer, gameTime, partialTick)
 		return buffer
 	}
 
-	/** 已碰撞的雨滴和它的轨迹在重新离开固体前不再绘制。 */
+	/** 已碰撞的雨滴源粒子不再绘制；轨迹仍按历史事件生成到自然到期。 */
 	private fun hideCollided(out: ParticleBuffer) {
 		if (splashHidden.isEmpty()) return
 		if (splashKeep.size < out.count) splashKeep = BooleanArray(maxOf(out.count, splashKeep.size * 2))
@@ -393,6 +392,8 @@ class ClientEffect(
 		} else {
 			sampleRawInto(out, cycle, age)
 		}
+		// 只在这一步过滤源粒子；轨迹随后生成，不继承碰撞隐藏状态。
+		hideCollided(out)
 		if (withTrail) appendTrails(out, age)
 		if (rotates) rotate(out)
 	}
