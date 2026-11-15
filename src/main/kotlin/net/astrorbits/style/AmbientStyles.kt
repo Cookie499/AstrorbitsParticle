@@ -172,6 +172,7 @@ object Rain : ParticleStyle {
 		val areaY = params.area.y.toFloat()
 		val areaZ = params.area.z.toFloat()
 		val perDrop = 1 + params.trailCount
+		val pos = FloatArray(3)
 
 		for (drop in 0 until effect.count) {
 			val life = EmissionMath.lifetime(effect.emission, seed, drop)
@@ -179,17 +180,18 @@ object Rain : ParticleStyle {
 			if (local <= 0f || local >= life) continue
 
 			val speed = params.speedMin + (params.speedMax - params.speedMin) * HashRandom.unit(seed, Streams.SPEED, drop)
-			// 在体积内取随机起点，再按各自存活时间下落；wrap 让雨幕持续循环。
-			val fall = speed * local
-			var x = origin.x.toFloat() +
-				(HashRandom.unit(seed, Streams.JITTER, drop, 100) - 0.5f) * areaX +
-				dir.x.toFloat() * fall
-			var y = origin.y.toFloat() +
-				(HashRandom.unit(seed, Streams.JITTER, drop, 101) - 0.5f) * areaY +
-				dir.y.toFloat() * fall
-			var z = origin.z.toFloat() +
-				(HashRandom.unit(seed, Streams.JITTER, drop, 102) - 0.5f) * areaZ +
-				dir.z.toFloat() * fall
+			// 在体积内取随机起点，再按各自存活时间积分；wrap 让雨幕持续循环。
+			val baseX = origin.x.toFloat() + (HashRandom.unit(seed, Streams.JITTER, drop, 100) - 0.5f) * areaX
+			val baseY = origin.y.toFloat() + (HashRandom.unit(seed, Streams.JITTER, drop, 101) - 0.5f) * areaY
+			val baseZ = origin.z.toFloat() + (HashRandom.unit(seed, Streams.JITTER, drop, 102) - 0.5f) * areaZ
+			StyleMath.posInto(
+				pos, baseX, baseY, baseZ,
+				dir.x.toFloat() * speed, dir.y.toFloat() * speed, dir.z.toFloat() * speed,
+				effect.physics.gravity, effect.physics.drag, effect.physics.wind, local,
+			)
+			var x = pos[0]
+			var y = pos[1]
+			var z = pos[2]
 			if (params.wrap) {
 				x = wrap(x, origin.x.toFloat(), areaX)
 				y = wrap(y, origin.y.toFloat(), areaY)
@@ -219,6 +221,7 @@ object Rain : ParticleStyle {
 		val params = effect.styleParams as Params
 		val dir = if (params.direction.lengthSqr() < 1e-9) Vec3(0.0, -1.0, 0.0) else params.direction.normalize()
 		return dir.scale(((params.speedMin + params.speedMax) * 0.5).toDouble())
+			.add(effect.physics.gravity.scale(age.toDouble()))
 	}
 
 	override fun particleCapacity(effect: BoundEffect): Int =
