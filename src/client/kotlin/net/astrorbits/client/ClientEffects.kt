@@ -502,9 +502,10 @@ class ClientEffect(
 		// 停止后 distance 模式无法从历史事件恢复，直接不再追加；time 模式保留已有事件。
 		if (stopped && trail.mode != TrailMode.TIME) return
 		val sourceCount = out.count
-		if (sourceCount == 0 && !stopped) return
-		// 停止后源粒子可能已经全部消失，用单帧源粒子上界估算仍需保留的轨迹数量。
-		val baseCount = if (sourceCount > 0) sourceCount else sourceMaxParticles
+		// distance 模式依赖当前源粒子；time 模式即使源粒子已经死光，也要让历史轨迹继续。
+		if (trail.mode == TrailMode.DISTANCE && sourceCount == 0 && !stopped) return
+		// 轨迹预算按单帧源粒子上限计算，不随当前存活数下降而截断或抽稀。
+		val baseCount = sourceMaxParticles
 		// 源粒子 + 每颗最多 trailCap 段；单特效轨迹总量另有硬上限。
 		val limit = baseCount + minOf(baseCount * trailCap, MAX_TRAIL_PARTICLES)
 		if (trail.mode == TrailMode.DISTANCE) {
