@@ -129,10 +129,18 @@ class ClientEffect(
 	private var stopContinuation = 0f
 	private var birthKeep = BooleanArray(0)
 
-	/** 停止发射后最多还要等多久，取粒子寿命上界按播放速度换算回墙钟时间。 */
-	private val stopTail: Float = (
-		bound.emission.lifetime * (1f + abs(bound.emission.lifetimeJitter))
-		).coerceAtLeast(0.05f) / abs(playScale).coerceAtLeast(0.01f)
+	/** 停止发射后最多还要等多久：取粒子寿命上界加轨迹段的时间跨度。 */
+	private val stopTail: Float = run {
+		val trailSpan = if (trail != null && trail.mode == TrailMode.TIME) {
+			trailCap * trail.interval
+		} else {
+			0f
+		}
+		(bound.emission.lifetime * (1f + abs(bound.emission.lifetimeJitter)))
+			.coerceAtLeast(0.05f)
+			.plus(trailSpan)
+			.div(abs(playScale).coerceAtLeast(0.01f))
+	}
 
 	init {
 		var size = 1f
@@ -234,7 +242,7 @@ class ClientEffect(
 		} else {
 			sampleRawInto(out, cycle, age)
 		}
-		if (withTrail && !stopped) appendTrails(out, age)
+		if (withTrail) appendTrails(out, age)
 		if (rotates) rotate(out)
 	}
 
@@ -333,22 +341,32 @@ class ClientEffect(
 	private fun appendTrails(out: ParticleBuffer, age: Float) {
 		val trail = trail ?: return
 		if (trailCap == 0) return
+		// 停止后 distance 模式无法从历史事件恢复，直接不再追加；time 模式保留已有事件。
+		if (stopped && trail.mode != TrailMode.TIME) return
 		val sourceCount = out.count
-		if (sourceCount == 0) return
+		if (sourceCount == 0 && !stopped) return
+		// 停止后源粒子可能已经全部消失，用单帧源粒子上界估算仍需保留的轨迹数量。
+		val baseCount = if (sourceCount > 0) sourceCount else sourceMaxParticles
 		// 源粒子 + 每颗最多 trailCap 段；单特效轨迹总量另有硬上限。
-		val limit = sourceCount + minOf(sourceCount * trailCap, MAX_TRAIL_PARTICLES)
+		val limit = baseCount + minOf(baseCount * trailCap, MAX_TRAIL_PARTICLES)
 		if (trail.mode == TrailMode.DISTANCE) {
 			appendDistanceTrails(out, age, sourceCount, limit)
 		} else {
-			appendTimeTrails(out, age, sourceCount, limit)
+			appendTimeTrails(out, age, sourceCount, baseCount, limit)
 		}
 	}
 
 	/** 时间模式：按 age - k*interval 逐段采样，位置取自历史时刻。 */
-	private fun appendTimeTrails(out: ParticleBuffer, age: Float, sourceCount: Int, limit: Int) {
+	private fun appendTimeTrails(
+		out: ParticleBuffer,
+		age: Float,
+		sourceCount: Int,
+		strideBase: Int,
+		limit: Int,
+	) {
 		val trail = trail ?: return
 		if (trail.drift > 0f) {
-			appendDriftingTrails(out, age, sourceCount, limit)
+			appendDriftingTrails(out, age, strideBase, limit)
 			return
 		}
 		if (trail.spread > 0f) indexSource(out, sourceCount)
@@ -357,9 +375,14 @@ class ClientEffect(
 			val pastAge = age - segment * trail.interval
 			// 非循环特效没有负年龄的历史；循环特效用周期回溯，允许 pastAge < 0。
 			if (!bound.definition.loop && pastAge <= 0f) break
+			// 停止后只保留停止时刻之前已经发射的轨迹，不再生成新的事件。
+			if (stopped && pastAge > stopAge) {
+				segment++
+				continue
+			}
 			sampleRawInto(trailScratch, trailCycle, pastAge)
 			if (trailScratch.count > 0) {
-				val stride = ((trailScratch.count + sourceCount - 1) / sourceCount).coerceAtLeast(1)
+				val stride = ((trailScratch.count + strideBase - 1) / strideBase).coerceAtLeast(1)
 				appendSegment(
 					out, trailScratch, segment, stride,
 					trail.spread * segment / trailCap, limit,
@@ -378,8 +401,14 @@ class ClientEffect(
 		val trail = trail ?: return
 		val step = trail.interval
 		if (step <= 0f) return
-		val latest = floor((age / step + 1e-4f).toDouble()).toLong()
-		val oldest = (latest - trailCap + 1L).coerceAtLeast(0L)
+		val rawLatest = floor((age / step + 1e-4f).toDouble()).toLong()
+		// 停止后不产生新事件，最多保留停止时刻及之前的发射事件。
+		val latest = if (stopped) {
+			minOf(rawLatest, floor((stopAge / step + 1e-4f).toDouble()).toLong())
+		} else {
+			rawLatest
+		}
+		val oldest = (rawLatest - trailCap + 1L).coerceAtLeast(0L)
 		var eventId = latest
 		while (eventId >= oldest && out.count < limit) {
 			val eventAge = age - eventId * step
