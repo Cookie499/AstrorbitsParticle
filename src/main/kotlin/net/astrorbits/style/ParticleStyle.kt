@@ -272,7 +272,7 @@ class BoundEffect(
 				i += stride
 			}
 		}
-		return (kotlin.math.sqrt(maxSq).toFloat() + 1f + (trail?.spread ?: 0f)).coerceIn(1f, 256f)
+		return (kotlin.math.sqrt(maxSq).toFloat() + 1f).coerceIn(1f, 256f)
 	}
 }
 
