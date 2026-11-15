@@ -411,7 +411,8 @@ object ServerEffects {
 			if (effect.endTick == Long.MAX_VALUE || now < effect.endTick) continue
 			iterator.remove()
 			particleEnds.remove(effect.id)
-			val payload = EffectStopPayload(longArrayOf(effect.id), false)
+			// 自然结束也保留已有粒子；每颗粒子按自己的寿命结束，不在 duration 处整批消失。
+			val payload = EffectStopPayload(longArrayOf(effect.id), true)
 			for (uuid in effect.subscribers) {
 				server.playerList.players.firstOrNull { it.uuid == uuid }?.let {
 					ServerPlayNetworking.send(it, payload)

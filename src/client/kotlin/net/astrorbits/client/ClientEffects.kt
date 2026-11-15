@@ -227,7 +227,12 @@ class ClientEffect(
 	fun expired(gameTime: Long): Boolean {
 		val age = ageAt(gameTime, 0f)
 		if (stopped) return age >= stopAge + stopTail
-		return !bound.definition.loop && age >= bound.duration
+		if (!bound.definition.loop && age >= bound.duration) {
+			// 服务端结束包可能晚一帧到达；本地先进入停止状态，避免整批粒子在 duration 处被切掉。
+			stop(gameTime)
+			return false
+		}
+		return false
 	}
 
 	fun sample(gameTime: Long, partialTick: Float): ParticleBuffer {
