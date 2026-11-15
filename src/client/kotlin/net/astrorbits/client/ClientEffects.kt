@@ -1,10 +1,14 @@
 package net.astrorbits.client
 
 import net.astrorbits.AstrorbitsParticle
+import net.astrorbits.math.HashRandom
+import net.astrorbits.math.Streams
 import net.astrorbits.model.EffectDefinition
 import net.astrorbits.model.Orientation
 import net.astrorbits.model.SpriteVariation
 import net.astrorbits.model.SubEffectTrigger
+import net.astrorbits.model.Trail
+import net.astrorbits.model.TrailMode
 import net.astrorbits.net.EffectClearPayload
 import net.astrorbits.net.EffectHandshakePayload
 import net.astrorbits.net.EffectImpactPayload
@@ -17,6 +21,7 @@ import net.astrorbits.style.BoundEffect
 import net.astrorbits.style.EffectBinder
 import net.astrorbits.style.ParticleBuffer
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking
+import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap
 import net.minecraft.client.Minecraft
 import net.minecraft.client.multiplayer.ClientLevel
 import net.minecraft.core.BlockPos
@@ -28,10 +33,17 @@ import kotlin.math.ceil
 import kotlin.math.cos
 import kotlin.math.floor
 import kotlin.math.sin
+import kotlin.math.sqrt
 
 private const val IMPACT_CHECKS_PER_TICK = 128
 private const val MAX_IMPACT_REPORTS = 8
 private const val MAX_LOOP_LOOKBACK = 8
+
+/** 单特效轨迹粒子硬上限；超出时截断较早的段，避免一帧写出几十万颗粒子。 */
+private const val MAX_TRAIL_PARTICLES = 16384
+
+/** 轨迹扩散用 JITTER 流的高位 draw，避开样式自己的随机取用。 */
+private const val TRAIL_SPREAD_DRAW = 1000
 
 class ClientEffect(
 	val id: Long,
@@ -51,6 +63,11 @@ class ClientEffect(
 	/** 周期采样暂存：渲染与客户端 tick 各一份，避免两个线程写同一组数组。 */
 	private val renderCycle = ParticleBuffer()
 	private val impactCycle = ParticleBuffer()
+
+	/** 轨迹采样暂存：历史年龄的样式输出先写这里，再按段追加到 [buffer]。 */
+	private val trailScratch = ParticleBuffer()
+	private val trailCycle = ParticleBuffer()
+
 	private val impactedBlocks = HashSet<Long>()
 	private var impactReports: Int = 0
 	val cullBox: AABB = AABB(origin, origin).inflate(
@@ -70,8 +87,51 @@ class ClientEffect(
 	private val cyclesForward: Boolean =
 		bound.definition.loop && bound.style.cyclicEmission && playScale >= 0f
 
-	/** 单帧最多产出的粒子数，缓冲区容量与客户端渲染预算都按它估算。 */
-	val maxParticles: Int = if (cyclesForward) bound.count * (loopLookback + 1) else bound.count
+	/** 单周期最多产出的源粒子数；一个发射序号拆成多颗粒子的样式由样式自己给出。 */
+	private val sourcePerCycle: Int = bound.style.particleCapacity(bound)
+
+	/** 单帧源粒子数上界，含正向循环回溯的周期。 */
+	private val sourceMaxParticles: Int =
+		(sourcePerCycle.toLong() * (if (cyclesForward) loopLookback.toLong() + 1L else 1L))
+			.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+
+	private val trail: Trail? = bound.trail
+
+	/** 请求的轨迹段数；单特效轨迹总量超过 [MAX_TRAIL_PARTICLES] 时从较早的段截断。 */
+	private val trailCap: Int = trail?.cap ?: 0
+
+	private val trailMaxParticles: Int =
+		minOf(sourceMaxParticles.toLong() * trailCap, MAX_TRAIL_PARTICLES.toLong()).toInt()
+
+	private val trailSizeMul = FloatArray(trailCap + 1)
+	private val trailAlphaMul = FloatArray(trailCap + 1)
+
+	/** 源粒子 id 到当前缓冲槽位；重复 id 取最后一次出现。 */
+	private val trailSourceIndex = Int2IntOpenHashMap().apply { defaultReturnValue(-1) }
+	private var trailPrevX = FloatArray(0)
+	private var trailPrevY = FloatArray(0)
+	private var trailPrevZ = FloatArray(0)
+	private var trailAccum = FloatArray(0)
+	private var trailEmitted = IntArray(0)
+	private var trailActive = BooleanArray(0)
+	private var trailSeen = IntArray(0)
+	private val trailOffset = FloatArray(3)
+	private var trailReserved = false
+
+	init {
+		var size = 1f
+		var alpha = 1f
+		val trail = this.trail
+		for (segment in 1..trailCap) {
+			size *= trail?.sizeScale ?: 1f
+			alpha *= trail?.alphaScale ?: 1f
+			trailSizeMul[segment] = size
+			trailAlphaMul[segment] = alpha
+		}
+	}
+
+	/** 单帧最多产出的粒子数（含轨迹），缓冲区容量与客户端渲染预算都按它估算。 */
+	val maxParticles: Int = sourceMaxParticles + trailMaxParticles
 
 	/** `orientation=view` 且触发时带方向时才旋转，避免世界朝向的特效多算一遍。 */
 	private val rotates: Boolean = bound.definition.orientation == Orientation.VIEW &&
@@ -88,7 +148,7 @@ class ClientEffect(
 	 */
 	fun collectImpacts(level: ClientLevel): FloatArray {
 		if (impactReports >= MAX_IMPACT_REPORTS) return EMPTY_POINTS
-		sampleInto(impactBuffer, impactCycle, ageAt(level.gameTime, 0f))
+		sampleInto(impactBuffer, impactCycle, ageAt(level.gameTime, 0f), false)
 		if (impactBuffer.count == 0) return EMPTY_POINTS
 		val points = ArrayList<Float>(MAX_IMPACT_REPORTS * 3)
 		val step = (impactBuffer.count / IMPACT_CHECKS_PER_TICK).coerceAtLeast(1)
@@ -116,12 +176,14 @@ class ClientEffect(
 	fun expired(gameTime: Long): Boolean = !bound.definition.loop && ageAt(gameTime, 0f) >= bound.duration
 
 	fun sample(gameTime: Long, partialTick: Float): ParticleBuffer {
-		sampleInto(buffer, renderCycle, ageAt(gameTime, partialTick))
+		reserveTrailBuffers()
+		sampleInto(buffer, renderCycle, ageAt(gameTime, partialTick), true)
 		return buffer
 	}
 
-	private fun sampleInto(out: ParticleBuffer, cycle: ParticleBuffer, age: Float) {
+	private fun sampleInto(out: ParticleBuffer, cycle: ParticleBuffer, age: Float, withTrail: Boolean) {
 		sampleRawInto(out, cycle, age)
+		if (withTrail) appendTrails(out, age)
 		if (rotates) rotate(out)
 	}
 
@@ -133,13 +195,13 @@ class ClientEffect(
 			} else {
 				scaled
 			}
-			out.reset(bound.count)
+			out.reset(sourceMaxParticles)
 			bound.style.sample(bound, origin, seed, sampleAge, out)
 			return
 		}
 		if (!cyclesForward) {
 			val wrapped = scaled % bound.duration
-			out.reset(bound.count)
+			out.reset(sourceMaxParticles)
 			bound.style.sample(
 				bound, origin, seed,
 				if (wrapped < 0f) wrapped + bound.duration else wrapped,
@@ -150,12 +212,293 @@ class ClientEffect(
 		val cycleIndex = floor(scaled / bound.duration).toLong()
 		val phase = scaled - cycleIndex * bound.duration
 		// 从最早可能存活的周期采到当前周期；样式按 local/life 过滤，缓冲区只留下还活着的粒子。
-		out.reset(maxParticles)
+		out.reset(sourceMaxParticles)
 		for (back in minOf(cycleIndex, loopLookback.toLong()).toInt() downTo 0) {
-			cycle.reset(bound.count)
+			cycle.reset(sourcePerCycle)
 			bound.style.sample(bound, origin, seed, phase + back * bound.duration, cycle)
 			out.append(cycle)
 		}
+	}
+
+	/** 预分配轨迹缓冲，避免逐帧扩容；关闭轨迹时不占额外内存。 */
+	private fun reserveTrailBuffers() {
+		if (trailReserved || trailCap == 0) return
+		buffer.reserve(maxParticles)
+		renderCycle.reserve(sourceMaxParticles)
+		trailScratch.reserve(sourceMaxParticles)
+		trailCycle.reserve(sourcePerCycle)
+		trailReserved = true
+	}
+
+	private fun appendTrails(out: ParticleBuffer, age: Float) {
+		val trail = trail ?: return
+		if (trailCap == 0) return
+		val sourceCount = out.count
+		if (sourceCount == 0) return
+		// 源粒子 + 每颗最多 trailCap 段；单特效轨迹总量另有硬上限。
+		val limit = sourceCount + minOf(sourceCount * trailCap, MAX_TRAIL_PARTICLES)
+		if (trail.mode == TrailMode.DISTANCE) {
+			appendDistanceTrails(out, age, sourceCount, limit)
+		} else {
+			appendTimeTrails(out, age, sourceCount, limit)
+		}
+	}
+
+	/** 时间模式：按 age - k*interval 逐段采样，位置取自历史时刻。 */
+	private fun appendTimeTrails(out: ParticleBuffer, age: Float, sourceCount: Int, limit: Int) {
+		val trail = trail ?: return
+		if (trail.spread > 0f) indexSource(out, sourceCount)
+		var segment = 1
+		while (segment <= trailCap) {
+			val pastAge = age - segment * trail.interval
+			// 非循环特效没有负年龄的历史；循环特效用周期回溯，允许 pastAge < 0。
+			if (!bound.definition.loop && pastAge <= 0f) break
+			sampleRawInto(trailScratch, trailCycle, pastAge)
+			if (trailScratch.count > 0) {
+				val stride = ((trailScratch.count + sourceCount - 1) / sourceCount).coerceAtLeast(1)
+				appendSegment(
+					out, trailScratch, segment, stride,
+					trail.spread * segment / trailCap, limit,
+				)
+				if (out.count >= limit) break
+			}
+			segment++
+		}
+	}
+
+	/**
+	 * 距离模式：从当前源粒子向过去逐步推进，沿每颗粒子自己的路径按 [Trail.distance] 取点。
+	 * 采样次数固定为 `2 * cap`，回溯窗口由 [Trail.lag] 限制。
+	 */
+	private fun appendDistanceTrails(out: ParticleBuffer, age: Float, sourceCount: Int, limit: Int) {
+		val trail = trail ?: return
+		val probes = trailCap * 2
+		val probe = trail.lag / probes
+		if (probe <= 0f) return
+		ensureTrailState(sourceMaxParticles)
+		indexSource(out, sourceCount)
+		var slot = 0
+		while (slot < sourceCount) {
+			trailPrevX[slot] = out.x[slot]
+			trailPrevY[slot] = out.y[slot]
+			trailPrevZ[slot] = out.z[slot]
+			trailAccum[slot] = 0f
+			trailEmitted[slot] = 0
+			trailActive[slot] = true
+			trailSeen[slot] = 0
+			slot++
+		}
+
+		var stamp = 0
+		var previousCycle = cycleIndex(age)
+		var j = 1
+		scan@ while (j <= probes && out.count < limit) {
+			val pastAge = age - j * probe
+			if (!bound.definition.loop && pastAge <= 0f) break
+			val cycle = cycleIndex(pastAge)
+			// 周期边界处同 id 的粒子属于另一个周期，链无法连续，直接停止本帧的跟踪。
+			if (bound.definition.loop && cycle != previousCycle) {
+				previousCycle = cycle
+				var s = 0
+				while (s < sourceCount) {
+					trailActive[s] = false
+					s++
+				}
+				j++
+				continue@scan
+			}
+			previousCycle = cycle
+			sampleRawInto(trailScratch, trailCycle, pastAge)
+			stamp++
+
+			var i = trailScratch.count - 1
+			while (i >= 0) {
+				val id = trailScratch.ids[i]
+				val s = if (id >= 0) trailSourceIndex.get(id) else -1
+				if (s >= 0 && s < sourceCount && trailActive[s] && trailSeen[s] != stamp) {
+					trailSeen[s] = stamp
+					val cx = trailScratch.x[i]
+					val cy = trailScratch.y[i]
+					val cz = trailScratch.z[i]
+					val dx = cx - trailPrevX[s]
+					val dy = cy - trailPrevY[s]
+					val dz = cz - trailPrevZ[s]
+					val distance = sqrt(dx * dx + dy * dy + dz * dz)
+					if (distance > 1e-6f) {
+						val start = trailAccum[s]
+						val end = start + distance
+						var segment = trailEmitted[s]
+						while (segment < trailCap) {
+							val target = trail.distance * (segment + 1)
+							if (target > end) break
+							val u = ((target - start) / distance).coerceIn(0f, 1f)
+							val px = trailPrevX[s] + dx * u
+							val py = trailPrevY[s] + dy * u
+							val pz = trailPrevZ[s] + dz * u
+							val alpha = trailScratch.alpha[i] * trailAlphaMul[segment + 1]
+							if (alpha > 0.004f) {
+								var ox = 0f
+								var oy = 0f
+								var oz = 0f
+								if (trail.spread > 0f) {
+									lateralOffset(
+										out, px, py, pz, id, segment + 1,
+										trail.spread * (segment + 1) / trailCap,
+									)
+									ox = trailOffset[0]
+									oy = trailOffset[1]
+									oz = trailOffset[2]
+								}
+								out.push(
+									px + ox, py + oy, pz + oz,
+									trailScratch.size[i] * trailSizeMul[segment + 1],
+									alpha,
+									colorWithAlpha(trailScratch.argb[i], alpha),
+									id,
+								)
+							}
+							segment++
+							if (out.count >= limit) {
+								trailEmitted[s] = segment
+								break@scan
+							}
+						}
+						trailEmitted[s] = segment
+						trailAccum[s] = end
+					}
+					trailPrevX[s] = cx
+					trailPrevY[s] = cy
+					trailPrevZ[s] = cz
+				}
+				i--
+			}
+
+			var s = 0
+			while (s < sourceCount) {
+				if (trailActive[s] && trailSeen[s] != stamp) trailActive[s] = false
+				s++
+			}
+			j++
+		}
+	}
+
+	private fun appendSegment(
+		out: ParticleBuffer,
+		hist: ParticleBuffer,
+		segment: Int,
+		stride: Int,
+		spreadRadius: Float,
+		limit: Int,
+	) {
+		val sizeScale = trailSizeMul[segment]
+		val alphaScale = trailAlphaMul[segment]
+		var i = 0
+		while (i < hist.count && out.count < limit) {
+			val alpha = hist.alpha[i] * alphaScale
+			if (alpha > 0.004f) {
+				var px = hist.x[i]
+				var py = hist.y[i]
+				var pz = hist.z[i]
+				if (spreadRadius > 0f) {
+					lateralOffset(out, px, py, pz, hist.ids[i], segment, spreadRadius)
+					px += trailOffset[0]
+					py += trailOffset[1]
+					pz += trailOffset[2]
+				}
+				out.push(
+					px, py, pz, hist.size[i] * sizeScale, alpha,
+					colorWithAlpha(hist.argb[i], alpha), hist.ids[i],
+				)
+			}
+			i += stride
+		}
+	}
+
+	private fun indexSource(out: ParticleBuffer, sourceCount: Int) {
+		trailSourceIndex.clear()
+		var i = 0
+		while (i < sourceCount) {
+			val id = out.ids[i]
+			if (id >= 0) trailSourceIndex.put(id, i)
+			i++
+		}
+	}
+
+	/** 横向偏移：垂直于该源粒子当前的运动方向；查不到源粒子时退回水平面。 */
+	private fun lateralOffset(
+		out: ParticleBuffer,
+		px: Float,
+		py: Float,
+		pz: Float,
+		id: Int,
+		segment: Int,
+		radius: Float,
+	) {
+		val slot = if (id >= 0) trailSourceIndex.get(id) else -1
+		var tx = 0f
+		var ty = 0f
+		var tz = 0f
+		if (slot >= 0) {
+			tx = out.x[slot] - px
+			ty = out.y[slot] - py
+			tz = out.z[slot] - pz
+		}
+		var e1x = 1f
+		var e1y = 0f
+		var e1z = 0f
+		var e2x = 0f
+		var e2y = 0f
+		var e2z = 1f
+		val length = sqrt(tx * tx + ty * ty + tz * tz)
+		if (length > 1e-4f) {
+			tx /= length
+			ty /= length
+			tz /= length
+			val rx = if (abs(ty) < 0.9f) 0f else 1f
+			val ry = if (abs(ty) < 0.9f) 1f else 0f
+			var nx = ty * 0f - tz * ry
+			var ny = tz * rx - tx * 0f
+			var nz = tx * ry - ty * rx
+			val nl = sqrt(nx * nx + ny * ny + nz * nz)
+			if (nl > 1e-4f) {
+				nx /= nl
+				ny /= nl
+				nz /= nl
+				e1x = nx
+				e1y = ny
+				e1z = nz
+				e2x = ty * nz - tz * ny
+				e2y = tz * nx - tx * nz
+				e2z = tx * ny - ty * nx
+			}
+		}
+		val a = HashRandom.signed(seed, Streams.JITTER, id, TRAIL_SPREAD_DRAW + segment * 2)
+		val b = HashRandom.signed(seed, Streams.JITTER, id, TRAIL_SPREAD_DRAW + segment * 2 + 1)
+		val unit = sqrt(a * a + b * b)
+		val scale = if (unit > 1e-4f) radius / unit else 0f
+		trailOffset[0] = (e1x * a + e2x * b) * scale
+		trailOffset[1] = (e1y * a + e2y * b) * scale
+		trailOffset[2] = (e1z * a + e2z * b) * scale
+	}
+
+	private fun ensureTrailState(size: Int) {
+		if (trailPrevX.size >= size) return
+		val capacity = maxOf(size, 64)
+		trailPrevX = FloatArray(capacity)
+		trailPrevY = FloatArray(capacity)
+		trailPrevZ = FloatArray(capacity)
+		trailAccum = FloatArray(capacity)
+		trailEmitted = IntArray(capacity)
+		trailActive = BooleanArray(capacity)
+		trailSeen = IntArray(capacity)
+	}
+
+	private fun cycleIndex(age: Float): Long =
+		if (!bound.definition.loop) 0L else floor(age * playScale / bound.duration.toDouble()).toLong()
+
+	private fun colorWithAlpha(argb: Int, alpha: Float): Int {
+		val byte = (alpha.coerceIn(0f, 1f) * 255f).toInt()
+		return (argb and 0x00FFFFFF) or (byte shl 24)
 	}
 
 	/** 把局部坐标绕原点转到触发时的视线方向：先按 pitch 绕 X 轴，再按 yaw 绕 Y 轴。 */
@@ -247,7 +590,7 @@ object ClientEffects {
 			adjustLifetime(raw)
 		}
 		val baseAge = payload.elapsedTicks / 20f
-		active[payload.effectId] = ClientEffect(
+		val effect = ClientEffect(
 			id = payload.effectId,
 			bound = bound,
 			seed = payload.seed,
@@ -258,9 +601,11 @@ object ClientEffects {
 			viewYaw = payload.viewYaw,
 			viewPitch = payload.viewPitch,
 		)
+		active[payload.effectId] = effect
 		AstrorbitsParticle.logger.info(
-			"[effect] client start id={} style={} particles={}",
-			payload.effectId, definition.style, bound.count,
+			"[effect] client start id={} style={} particles={} budget={} trail={}",
+			payload.effectId, definition.style, bound.count, effect.maxParticles,
+			bound.trail?.let { "${it.mode.name.lowercase()}:${it.cap}" } ?: "-",
 		)
 	}
 

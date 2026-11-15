@@ -292,6 +292,9 @@ object Comet : ParticleStyle {
 		return params.velocity.add(effect.physics.gravity.scale(age.toDouble()))
 	}
 
+	override fun particleCapacity(effect: BoundEffect): Int =
+		1 + (effect.styleParams as Params).tailCount
+
 	override fun sample(effect: BoundEffect, origin: Vec3, seed: Long, age: Float, out: ParticleBuffer) {
 		val params = effect.styleParams as Params
 		val pos = FloatArray(3)

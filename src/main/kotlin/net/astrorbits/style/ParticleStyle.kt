@@ -15,6 +15,7 @@ import net.astrorbits.model.Emission
 import net.astrorbits.model.EmissionMode
 import net.astrorbits.model.Physics
 import net.astrorbits.model.SpriteVariation
+import net.astrorbits.model.Trail
 import net.astrorbits.model.float
 import net.astrorbits.model.getOrNull
 import net.astrorbits.model.int
@@ -38,6 +39,12 @@ interface ParticleStyle {
 
 	/** 该样式在 [age] 时刻的近似速度，供 appearance.stretch 拉长面片；无法确定返回 null。 */
 	fun stretchVector(effect: BoundEffect, age: Float): Vec3? = null
+
+	/**
+	 * 单次 [sample] 最多写出的粒子数。默认等于 `emission.count`；
+	 * 一个发射序号拆成多颗粒子的样式要覆盖，供客户端预留轨迹缓冲和渲染预算。
+	 */
+	fun particleCapacity(effect: BoundEffect): Int = effect.count
 
 	/**
 	 * 循环播放时是否按周期重新发射一批粒子。
@@ -236,11 +243,12 @@ class BoundEffect(
 	val appearance: BoundAppearance,
 	val physics: Physics,
 	val styleParams: BoundStyle,
+	val trail: Trail?,
 ) {
 	/** 采样各年龄的粒子位置，取最大距离外扩 1 格，避免飞得远的样式被提前剔除。 */
 	fun withLifetime(lifetime: Float): BoundEffect = BoundEffect(
 		definition, style, count, duration, emission.copy(lifetime = lifetime),
-		appearance, physics, styleParams,
+		appearance, physics, styleParams, trail,
 	)
 
 	val radius: Float = boundsRadius()
@@ -264,7 +272,7 @@ class BoundEffect(
 				i += stride
 			}
 		}
-		return (kotlin.math.sqrt(maxSq).toFloat() + 1f).coerceIn(1f, 256f)
+		return (kotlin.math.sqrt(maxSq).toFloat() + 1f + (trail?.spread ?: 0f)).coerceIn(1f, 256f)
 	}
 }
 
@@ -307,6 +315,7 @@ object EffectBinder {
 			appearance = appearance,
 			physics = definition.physics,
 			styleParams = styleParams,
+			trail = definition.trail,
 		)
 	}
 

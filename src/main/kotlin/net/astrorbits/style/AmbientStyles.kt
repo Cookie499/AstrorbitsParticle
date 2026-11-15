@@ -200,6 +200,9 @@ object Rain : ParticleStyle {
 		return dir.scale(((params.speedMin + params.speedMax) * 0.5).toDouble())
 	}
 
+	override fun particleCapacity(effect: BoundEffect): Int =
+		effect.count * (1 + (effect.styleParams as Params).trailCount)
+
 	private fun wrap(value: Float, center: Float, size: Float): Float {
 		if (size <= 1e-4f) return value
 		val offset = (value - center + size * 0.5f).mod(size)

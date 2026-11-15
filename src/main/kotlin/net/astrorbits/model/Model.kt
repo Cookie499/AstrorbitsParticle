@@ -38,6 +38,43 @@ enum class SpriteVariation {
 	}
 }
 
+/** 轨迹回溯方式：`TIME` 按固定时间间隔，`DISTANCE` 按每颗粒子沿路径走过的距离。 */
+enum class TrailMode {
+	TIME, DISTANCE;
+
+	companion object {
+		fun parse(raw: String): TrailMode =
+			entries.firstOrNull { it.name.equals(raw, ignoreCase = true) } ?: TIME
+	}
+}
+
+/**
+ * 轨迹粒子参数。写 `trail` 对象即启用。
+ *
+ * `interval` 只用于 [TrailMode.TIME]，`distance` 与 `lag` 只用于 [TrailMode.DISTANCE]。
+ */
+data class Trail(
+	val mode: TrailMode = TrailMode.TIME,
+	/** time 模式每段的回溯间隔（秒）。 */
+	val interval: Float = 0.1f,
+	/** distance 模式每段沿路径的距离（块）。 */
+	val distance: Float = 0.5f,
+	/** distance 模式最长回溯时间（秒）。 */
+	val lag: Float = 1f,
+	/** 最多几段，不含源粒子。 */
+	val cap: Int = 8,
+	/** 第 k 段相对源粒子的横向随机偏移半径（块），取 spread * k / cap。 */
+	val spread: Float = 0f,
+	/** 逐段尺寸倍率，第 k 段乘 sizeScale^k。 */
+	val sizeScale: Float = 0.8f,
+	/** 逐段不透明度倍率，第 k 段乘 alphaScale^k。 */
+	val alphaScale: Float = 0.7f,
+) {
+	companion object {
+		const val MAX_CAP = 32
+	}
+}
+
 /** 子特效触发方式：定义结束、单个粒子消失，或客户端报告粒子碰撞。 */
 enum class SubEffectTrigger {
 	END, IMPACT, PARTICLE_END;
@@ -118,6 +155,7 @@ data class EffectDefinition(
 	val emission: Emission,
 	val physics: Physics,
 	val appearance: Appearance,
+	val trail: Trail?,
 	val visibility: Visibility,
 	val params: JsonObject,
 	val source: String,
@@ -148,12 +186,13 @@ data class EffectDefinition(
 				?: parseEmission(JsonObject(), duration)
 			val physics = obj.objectOrNull("physics")?.let(::parsePhysics) ?: Physics()
 			val appearance = obj.objectOrNull("appearance")?.let(::parseAppearance) ?: Appearance()
+			val trail = obj.objectOrNull("trail")?.let(::parseTrail)
 			val visibility = obj.objectOrNull("visibility")?.let(::parseVisibility) ?: Visibility()
 			val params = obj.objectOrNull("params") ?: JsonObject()
 
 			EffectDefinition(
 				style, duration, loop, orientation, reverse, timeScale, subEffect, subEffectTrigger,
-				emission, physics, appearance, visibility, params, json,
+				emission, physics, appearance, trail, visibility, params, json,
 			)
 		}
 
@@ -194,6 +233,20 @@ data class EffectDefinition(
 			stretch = obj.get("stretch"),
 			spin = obj.get("spin"),
 		)
+
+		private fun parseTrail(obj: JsonObject): Trail? {
+			if (!obj.bool("enabled", true)) return null
+			return Trail(
+				mode = TrailMode.parse(obj.string("mode", "time")),
+				interval = obj.float("interval", 0.1f).coerceIn(0.01f, 10f),
+				distance = obj.float("distance", 0.5f).coerceIn(0.01f, 16f),
+				lag = obj.float("lag", 1f).coerceIn(0.01f, 16f),
+				cap = obj.int("cap", 8).coerceIn(1, Trail.MAX_CAP),
+				spread = obj.float("spread", 0f).coerceIn(0f, 8f),
+				sizeScale = obj.float("sizeScale", 0.8f).coerceIn(0f, 1f),
+				alphaScale = obj.float("alphaScale", 0.7f).coerceIn(0f, 1f),
+			)
+		}
 
 		private fun parseVisibility(obj: JsonObject): Visibility = Visibility(
 			viewDistance = obj.float("viewDistance", 96f).coerceIn(8f, 512f),
