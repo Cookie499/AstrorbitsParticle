@@ -213,6 +213,103 @@
 		return out;
 	}
 
+	/**
+	 * 内联命令用的最小定义：省略与解析默认值相同的字段，语义与原定义等价。
+	 * 默认值取自 Model.parse：缺省字段由解析器补齐，因此可以安全省略。
+	 */
+	const PARSE_DEFAULTS = parseDefinition('{"style":"astrorbitsparticle:radial_burst"}');
+
+	const sameValue = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+	const sameNumber = (a, b) => typeof a === 'number' && Math.abs(a - b) < 1e-9;
+
+	function minimalDefinition(def) {
+		const d = PARSE_DEFAULTS;
+		const out = { style: def.style };
+		if (!sameNumber(def.duration, d.duration)) out.duration = def.duration;
+		if (def.loop) out.loop = true;
+		if (def.orientation !== d.orientation) out.orientation = def.orientation;
+		if (def.reverse) out.reverse = true;
+		if (!sameNumber(def.timeScale, d.timeScale)) out.timeScale = def.timeScale;
+		if (def.subEffect) {
+			out.subEffect = def.subEffect;
+			if (def.subEffectTrigger !== d.subEffectTrigger) out.subEffectTrigger = def.subEffectTrigger;
+		}
+
+		const e = def.emission;
+		const emission = {};
+		if (e.mode !== d.emission.mode) emission.mode = e.mode;
+		if (e.count !== d.emission.count) emission.count = e.count;
+		if (!sameNumber(e.windowStart, 0) || !sameNumber(e.windowEnd, 0)) emission.window = [e.windowStart, e.windowEnd];
+		if (!sameNumber(e.jitter, 0)) emission.jitter = e.jitter;
+		// lifetime 的默认值是 duration，不是常量
+		if (!sameNumber(e.lifetime, def.duration)) emission.lifetime = e.lifetime;
+		if (!sameNumber(e.lifetimeJitter, d.emission.lifetimeJitter)) emission.lifetimeJitter = e.lifetimeJitter;
+		if (Object.keys(emission).length) out.emission = emission;
+
+		const p = def.physics;
+		const physics = {};
+		if (!sameValue(p.gravity, d.physics.gravity)) physics.gravity = p.gravity;
+		if (!sameNumber(p.drag, 0)) physics.drag = p.drag;
+		if (!sameValue(p.wind, [0, 0, 0])) physics.wind = p.wind;
+		if (Object.keys(physics).length) out.physics = physics;
+
+		const a = def.appearance;
+		const appearance = {};
+		if (a.sprite !== d.appearance.sprite) appearance.sprite = a.sprite;
+		if (a.spriteVariation !== d.appearance.spriteVariation) appearance.spriteVariation = a.spriteVariation;
+		if (a.spriteCycleTicks !== d.appearance.spriteCycleTicks) appearance.spriteCycleTicks = a.spriteCycleTicks;
+		// size / sizeByAge / alphaByAge / stretch / spin 在解析期是 null，绑定期的默认值如下
+		if (a.size !== null && !sameNumber(a.size, 0.2)) appearance.size = a.size;
+		if (!sameNumber(a.sizeJitter, d.appearance.sizeJitter)) appearance.sizeJitter = a.sizeJitter;
+		if (a.sizeByAge !== null && !sameValue(a.sizeByAge, [[0, 1], [1, 0]])) appearance.sizeByAge = a.sizeByAge;
+		if (a.color !== null && !sameValue(String(a.color).toUpperCase(), '#FFFFFF')) appearance.color = a.color;
+		if (!sameNumber(a.colorJitter, 0)) appearance.colorJitter = a.colorJitter;
+		if (a.colorByAge !== null) appearance.colorByAge = a.colorByAge;
+		if (a.alphaByAge !== null && !sameValue(a.alphaByAge, [[0, 1], [0.7, 1], [1, 0]])) appearance.alphaByAge = a.alphaByAge;
+		if (a.blend !== d.appearance.blend) appearance.blend = a.blend;
+		if (!a.fullbright) appearance.fullbright = false;
+		if (a.stretch !== null && !sameNumber(a.stretch, 0)) appearance.stretch = a.stretch;
+		if (a.spin !== null && !sameNumber(a.spin, 0)) appearance.spin = a.spin;
+		if (Object.keys(appearance).length) out.appearance = appearance;
+
+		if (def.trail) {
+			const t = def.trail;
+			const trail = { enabled: true };
+			if (t.mode !== 'time') trail.mode = t.mode;
+			if (!sameNumber(t.interval, 0.1)) trail.interval = t.interval;
+			if (!sameNumber(t.distance, 0.5)) trail.distance = t.distance;
+			if (!sameNumber(t.lag, 1)) trail.lag = t.lag;
+			if (t.cap !== 8) trail.cap = t.cap;
+			if (!sameNumber(t.spread, 0)) trail.spread = t.spread;
+			if (!sameNumber(t.drift, 0)) trail.drift = t.drift;
+			if (!sameNumber(t.sizeScale, 0.8)) trail.sizeScale = t.sizeScale;
+			if (!sameNumber(t.alphaScale, 0.7)) trail.alphaScale = t.alphaScale;
+			if (t.color !== null) trail.color = t.color;
+			out.trail = trail;
+		}
+
+		if (def.splash) {
+			const sp = def.splash;
+			const splash = { enabled: true };
+			if (sp.color !== null) splash.color = sp.color;
+			if (sp.count !== 4) splash.count = sp.count;
+			if (!sameNumber(sp.size, 0.12)) splash.size = sp.size;
+			if (!sameNumber(sp.speed, 1.2)) splash.speed = sp.speed;
+			if (!sameNumber(sp.life, 0.45)) splash.life = sp.life;
+			out.splash = splash;
+		}
+
+		const v = def.visibility;
+		const visibility = {};
+		if (!sameNumber(v.viewDistance, 96)) visibility.viewDistance = v.viewDistance;
+		if (!v.requireScene) visibility.requireScene = false;
+		if (!sameNumber(v.boundsPadding, 1)) visibility.boundsPadding = v.boundsPadding;
+		if (Object.keys(visibility).length) out.visibility = visibility;
+
+		if (Object.keys(def.params).length) out.params = def.params;
+		return out;
+	}
+
 	// ───────────────────────── 绑定 ─────────────────────────
 	const DEFAULT_SIZE_CURVE = [0, 1, 1, 0];
 	const DEFAULT_ALPHA_CURVE = [0, 1, 0.7, 1, 1, 0];
@@ -912,7 +1009,7 @@
 	return {
 		MOD_CONFIG, MAX_LOOP_LOOKBACK, MAX_TRAIL_PARTICLES, MAX_SPLASH_PARTICLES,
 		TRAIL_SIZE_SEGMENTS,
-		parseDefinition, definitionToJson, bind, boundsRadius, particleCapacity, birthAge,
+		parseDefinition, definitionToJson, minimalDefinition, bind, boundsRadius, particleCapacity, birthAge,
 		Playback, sampleRaw,
 	};
 });

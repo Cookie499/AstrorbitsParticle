@@ -21,10 +21,15 @@
 | --- | --- |
 | 定义 JSON | 当前定义序列化结果，只读高亮，可复制或下载 `<id>.json` |
 | 原始配置 | 载入时的定义原文，可直接改再点「应用」覆盖编辑器状态；「重填当前」换成当前生成的定义 |
-| 游戏内命令 | `/astrorticle test`、`/astrorticle effect play`（文件 id 与内联 JSON 两种）、`/astrorticle schema`；下载为 `.mcfunction` |
+| 游戏内命令 | 只有一行内联定义 `/astrorticle effect play {...}`，省略与解析默认值相同的字段，复制即可执行；下载为 `.mcfunction` |
 | 诊断 | 粒子数、预算上限、包围球、回溯周期、贴图来源、参数问题；下载为 `.txt` |
 
-当前定义与某个内置测试预设完全一致时，命令页会直接给出 `/astrorticle test <预设>`。
+命令页的 JSON 是**最小等价定义**：省略的字段由解析器补默认值，采样结果与原定义逐位相同
+（`golden-check.js` 会对 13 个模板验证这一点）。完整定义看「定义 JSON」页。
+
+内联命令通常 380–560 字符。26.2 的 `ChatScreen` 在构造输入框后调用 `setMaxLength(256)`，
+所以聊天栏粘不下完整定义，会被截断；改用命令方块（上限 32500 字符）或下载的 `.mcfunction` 执行。
+复制时的提示与「诊断」页都会给出实际字符数。
 
 ![原始配置页](docs/preview-raw.png)
 
@@ -98,6 +103,20 @@ node web/tools/sync-assets.js --vanilla
 node web/tools/gen-astro-textures.js   # 用 headless Chrome 把 sprites.js 的形状导出成 PNG
 node web/tools/sync-assets.js          # 重建清单
 ```
+
+### 颜色显示
+
+叠加混合（`blend: additive`）在粒子密集处会刷白，这是定义本身的行为，游戏内一样。
+两个只看预览、不改定义的辅助：
+
+- 中栏「原色」：强制普通混合，逐粒子显示真实颜色，用来判断颜色和渐变对不对。
+- 「外观 → 颜色预览」：画出当前颜色条，标注各点的 u 与色值。发白多半是渐变起点为 `#FFFFFF`，
+  或者密度过高叠加饱和；色板起点与密度都能在编辑器里直接调。
+
+![叠加与真实颜色](docs/preview-true-color.png)
+
+左图是定义里的叠加混合，密集处被累加到纯白；右图打开「原色」后按普通混合提交，
+同一批粒子显示 `#7FD4FF`，近白像素从 8337 个降到 0 个。
 
 ### 贴图模式
 

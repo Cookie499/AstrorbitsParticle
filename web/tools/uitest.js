@@ -48,9 +48,10 @@ const SCRIPT = `(async () => {
 	check('template applied', document.getElementById('modal').hidden && S.state.def.style.includes('radial'), tplName);
 	document.querySelector('[data-tab="command"]').click();
 	await frame();
-	check('command detects test preset',
-		document.getElementById('outputBody').textContent.includes('/astrorticle test radial'),
-		document.getElementById('outputBody').textContent.split('\\n')[1]);
+	const firstCommand = document.getElementById('outputBody').textContent.trim();
+	check('command starts with inline definition',
+		firstCommand.startsWith('/astrorticle effect play {') && firstCommand.endsWith('}'),
+		firstCommand.slice(0, 48));
 	document.querySelector('[data-tab="json"]').click();
 	await frame();
 
@@ -111,8 +112,11 @@ const SCRIPT = `(async () => {
 	document.querySelector('[data-tab="command"]').click();
 	await frame();
 	const commandText = document.getElementById('outputBody').textContent;
-	check('command tab', commandText.includes('/astrorticle effect play') && commandText.includes('my_effect'),
-		commandText.split('\\n')[1]);
+	check('command is one inline line',
+		commandText.startsWith('/astrorticle effect play {')
+		&& commandText.trim().split('\\n').length === 1
+		&& !commandText.includes('# '),
+		commandText.length + ' chars');
 	document.querySelector('[data-tab="diag"]').click();
 	await frame();
 	check('diag tab', document.getElementById('outputBody').textContent.includes('参数问题'));

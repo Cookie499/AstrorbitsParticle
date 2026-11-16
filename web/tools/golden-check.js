@@ -125,6 +125,44 @@ for (const row of summary) {
 	);
 }
 
+// ── 最小内联定义：省略默认值后必须采样逐位一致 ──
+let minimalFailures = 0;
+for (const preset of P.PRESETS) {
+	const def = E.parseDefinition(preset.json);
+	const minimal = E.minimalDefinition(def);
+	const roundTrip = E.parseDefinition(JSON.stringify(minimal));
+	const original = E.bind(def).bound;
+	const compact = E.bind(roundTrip).bound;
+	let diff = 0;
+	for (const age of [0.4, 1.6]) {
+		const a = E.sampleRaw(original, new C.Rand(777), age);
+		const b = E.sampleRaw(compact, new C.Rand(777), age);
+		if (a.count !== b.count) { diff += 1; continue; }
+		for (let i = 0; i < a.count; i++) {
+			if (a.x[i] !== b.x[i] || a.y[i] !== b.y[i] || a.z[i] !== b.z[i]
+				|| a.size[i] !== b.size[i] || a.alpha[i] !== b.alpha[i] || a.argb[i] !== b.argb[i]) {
+				diff++;
+				break;
+			}
+		}
+	}
+	if (diff > 0) {
+		minimalFailures++;
+		console.log(`[minimal] ${preset.id}: compact definition samples differently (${diff} age step(s))`);
+	}
+}
+const commandLines = P.PRESETS.map((preset) => {
+	const cmd = '/astrorticle effect play ' + JSON.stringify(E.minimalDefinition(E.parseDefinition(preset.json)));
+	return `${preset.id.padEnd(24)}${String(cmd.length).padStart(4)} chars`;
+});
+console.log('\n' + commandLines.join('\n'));
+if (minimalFailures > 0) {
+	console.log(`\n[fail] ${minimalFailures} preset(s) changed behaviour after omitting defaults`);
+	failures += minimalFailures;
+} else {
+	console.log('\n[ok] minimal inline JSON samples identically for ' + P.PRESETS.length + ' presets');
+}
+
 if (failures > 0) {
 	console.log(`\n[fail] ${failures} preset(s) differ from the golden baseline`);
 	process.exit(1);

@@ -143,6 +143,8 @@ body {
 .btn:active { transform: translateY(1px); }
 
 .btn-primary { background: var(--green); border-color: var(--green); color: #fff; }
+.btn.on { background: var(--green); border-color: var(--green); color: #fff; }
+.btn.on:hover { background: var(--green-dark); border-color: var(--green-dark); }
 .btn-primary:hover { background: var(--green-dark); border-color: var(--green-dark); color: #fff; }
 
 .btn-ghost { background: var(--panel-2); }
@@ -490,6 +492,8 @@ body {
 }
 .output-tools .btn:hover { border-color: var(--green-hi); color: #fff; background: #223019; }
 .output-tools .btn-primary { background: var(--green); border-color: var(--green); color: #fff; }
+.btn.on { background: var(--green); border-color: var(--green); color: #fff; }
+.btn.on:hover { background: var(--green-dark); border-color: var(--green-dark); }
 .output-tools .btn-primary:hover { background: var(--green-dark); border-color: var(--green-dark); }
 
 .output-body {
@@ -543,6 +547,8 @@ body {
 .raw-bar .btn { border-color: #333c28; background: #1b2115; color: #c6d3b4; height: 24px; }
 .raw-bar .btn:hover { border-color: var(--green-hi); color: #fff; }
 .raw-bar .btn-primary { background: var(--green); border-color: var(--green); color: #fff; }
+.btn.on { background: var(--green); border-color: var(--green); color: #fff; }
+.btn.on:hover { background: var(--green-dark); border-color: var(--green-dark); }
 
 .raw-pane textarea {
 	flex: 1;
@@ -742,6 +748,23 @@ select.sel {
 }
 .chip-multi.on { background: var(--green); border-color: var(--green); color: #fff; }
 .chip-multi:hover { border-color: var(--green-hi); }
+
+.ramp-bar {
+	height: 16px;
+	border: 2px solid var(--line);
+	width: 100%;
+}
+
+.ramp-legend {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	font: 10px/1.4 var(--mono);
+	color: var(--muted);
+	margin-top: 3px;
+}
+
+.ramp-note { color: var(--green-dark); }
 
 .curve-editor { width: 100%; }
 .curve-editor svg { display: block; width: 100%; height: 58px; background: var(--panel-2); border: 2px solid var(--line); cursor: crosshair; touch-action: none; }

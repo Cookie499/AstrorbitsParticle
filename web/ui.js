@@ -83,6 +83,7 @@
 		showGrid: true,
 		useGround: false,
 		spriteMode: 'texture',
+		trueColor: false,
 		open: { base: true, emission: true, physics: false, appearance: true, trail: false, splash: false, visibility: false, params: true },
 		fps: 0,
 		splashAcc: 0,
@@ -160,8 +161,11 @@
 		state.camera.target = [0, clamp(radius * 0.26, 0, 4.5), 0];
 	}
 
+	const liveRefreshers = new Set();
+
 	function commit(options) {
 		state.dirty = true;
+		for (const refresh of liveRefreshers) refresh();
 		if (options && options.structure) rebuildInspector();
 	}
 
@@ -432,7 +436,8 @@
 	function drawParticles(cam, buffer, bound) {
 		if (!buffer || buffer.count === 0) return 0;
 		const appearance = bound.appearance;
-		const additive = appearance.blend === 'additive';
+		// 「原色」预览：强制普通混合，避免叠加把颜色刷成白色
+		const additive = appearance.blend === 'additive' && !state.trueColor;
 		const stretch = appearance.stretch.at(state.age);
 		const stretchVec = stretch > 0 && state.playback ? state.playback.stretchVector(state.age) : null;
 		const stretched = stretchVec && (stretchVec[0] ** 2 + stretchVec[1] ** 2 + stretchVec[2] ** 2) > 1e-6;
@@ -976,6 +981,41 @@
 		return { el: wrap };
 	}
 
+	/** 当前生效的颜色条：有渐变用渐变，否则单一基色。 */
+	function colorRamp(appearance) {
+		const raw = appearance.colorByAge;
+		const stops = [];
+		if (Array.isArray(raw)) {
+			for (const pair of raw) {
+				if (Array.isArray(pair) && pair.length >= 2) stops.push([Number(pair[0]), String(pair[1])]);
+			}
+		}
+		if (stops.length >= 2) return { stops: stops.sort((a, b) => a[0] - b[0]), gradient: true };
+		const base = typeof appearance.color === 'string' ? appearance.color : '#FFFFFF';
+		return { stops: [[0, base], [1, base]], gradient: false };
+	}
+
+	function colorRampControl() {
+		const bar = h('div', { class: 'ramp-bar' });
+		const legend = h('div', { class: 'ramp-legend' });
+		const wrap = h('div', {}, bar, legend);
+
+		function paint() {
+			const { stops, gradient } = colorRamp(state.def.appearance);
+			bar.style.background = 'linear-gradient(90deg,' +
+				stops.map(([u, color]) => `${color} ${(clamp(u, 0, 1) * 100).toFixed(1)}%`).join(',') + ')';
+			legend.innerHTML = '';
+			for (const [u, color] of stops.slice(0, 4)) {
+				legend.append(h('span', {}, `${u.toFixed(2)} ${color}`));
+			}
+			legend.append(h('span', { class: 'ramp-note' }, gradient ? '按年龄渐变，不含透明度' : '单一基色，不含透明度'));
+		}
+
+		paint();
+		liveRefreshers.add(paint);
+		return { el: wrap };
+	}
+
 	/** 颜色渐变：一串 [u, "#RRGGBB"]。 */
 	function gradientControl(opts) {
 		const list = h('div', { class: 'gradient-list' });
@@ -1173,12 +1213,14 @@
 
 	function rebuildInspector() {
 		const inspector = $('#inspector');
+		liveRefreshers.clear();
 		inspector.innerHTML = '';
 		for (const spec of SECTIONS) inspector.append(buildSectionShell(spec));
 		refreshSections();
 	}
 
 	function refreshSections() {
+		liveRefreshers.clear();
 		for (const [id, entry] of sectionNodes) {
 			entry.body.innerHTML = '';
 			const builder = BUILDERS[id];
@@ -1312,6 +1354,7 @@
 				value: typeof a.color === 'string' ? a.color : '#FFFFFF',
 				onChange: (v) => { a.color = v; },
 			})).el);
+			body.append(row('颜色预览', '左端 u=0、右端 u=1，只画 RGB。发白多半是渐变起点为白色，或叠加混合过亮。', colorRampControl()).el);
 			body.append(row('亮度抖动', '逐粒子颜色亮度的随机比例（0..1）。', numControl({
 				value: a.colorJitter, min: 0, max: 1, step: 0.01,
 				onChange: (v) => { a.colorJitter = v; },
@@ -1695,40 +1738,9 @@
 		return (state.effectName || 'my_effect').replace(/[^a-z0-9_\-]/gi, '_');
 	}
 
-	/** 当前定义与哪个内置测试预设完全一致（用于给出 /astrorticle test 命令）。 */
-	function matchingTestPreset() {
-		const target = JSON.stringify(currentJson());
-		for (const preset of Presets.TEST) {
-			try {
-				if (JSON.stringify(Fx.definitionToJson(normalizeDef(Fx.parseDefinition(preset.json)))) === target) {
-					return preset;
-				}
-			} catch (err) { /* 忽略单个预设的解析失败 */ }
-		}
-		return null;
-	}
-
+	/** 命令页只有一行：内联定义，复制即可执行（省略了与解析默认值相同的字段）。 */
 	function commandText() {
-		const name = effectSlug();
-		const minified = JSON.stringify(currentJson());
-		const preset = matchingTestPreset();
-		const lines = [];
-		if (preset) {
-			lines.push(`# 当前定义与内置测试预设 ${preset.id} 完全一致，最省事的播法：`);
-			lines.push(`/astrorticle test ${preset.id}`);
-			lines.push('');
-		}
-		lines.push(`# 1) 存为 config/astrorbitsparticle/effects/${name}.json，重载后按 id 播放`);
-		lines.push('/astrorticle reload');
-		lines.push(`/astrorticle effect play astrorbitsparticle:${name}`);
-		lines.push('');
-		lines.push('# 2) 或者把定义直接贴进命令（一行 JSON，需要 gamemaster 权限）');
-		lines.push(`/astrorticle effect play ${minified}`);
-		lines.push('');
-		lines.push('# 3) 常用：查看样式参数 / 列出已加载特效');
-		lines.push(`/astrorticle schema ${styleOf(state.def).id}`);
-		lines.push('/astrorticle effect list');
-		return lines.join('\n');
+		return '/astrorticle effect play ' + JSON.stringify(Fx.minimalDefinition(state.def));
 	}
 
 	function diagnosticText() {
@@ -1744,6 +1756,8 @@
 			lines.push(`回溯周期    ${clamp(Math.ceil(lifespan / state.def.duration), 1, 8)}`);
 		}
 		lines.push(`种子        ${state.seed}`);
+		const command = commandText();
+		lines.push(`内联命令    ${command.length} 字符${command.length > 256 ? '（超过聊天框 256，用命令方块或函数）' : '（可直接粘进聊天框）'}`);
 		if (state.useGround) lines.push(`地面        y = ${state.groundY}（splash 检测面）`);
 		const entry = SPRITE_ENTRIES.get(state.def.appearance.sprite);
 		lines.push(`贴图        ${state.def.appearance.sprite} · ${entry && entry.files.length
@@ -2044,6 +2058,11 @@
 		}
 
 		$('#chkGrid').addEventListener('change', (event) => { state.showGrid = event.target.checked; });
+		$('#btnTrueColor').addEventListener('click', () => {
+			state.trueColor = !state.trueColor;
+			$('#btnTrueColor').classList.toggle('on', state.trueColor);
+			toast(state.trueColor ? '原色预览：强制普通混合，不改定义' : '恢复定义里的混合方式');
+		});
 		for (const button of document.querySelectorAll('#spriteMode button')) {
 			button.addEventListener('click', () => {
 				state.spriteMode = button.dataset.mode;
@@ -2089,17 +2108,22 @@
 		$('#btnCopy').addEventListener('click', async () => {
 			let text;
 			if (state.outputTab === 'json') text = JSON.stringify(currentJson(), null, 2);
-			else if (state.outputTab === 'command') text = $('#outputBody').textContent;
+			else if (state.outputTab === 'raw') text = $('#rawText').value;
 			else text = $('#outputBody').textContent;
+			const note = state.outputTab === 'command'
+				? (text.length > 256
+					? `已复制命令（${text.length} 字符，超过聊天框 256 上限，请用命令方块或函数执行）`
+					: `已复制命令（${text.length} 字符）`)
+				: '已复制到剪贴板';
 			try {
 				await navigator.clipboard.writeText(text);
-				toast('已复制到剪贴板');
+				toast(note);
 			} catch (err) {
 				const area = document.createElement('textarea');
 				area.value = text;
 				document.body.append(area);
 				area.select();
-				try { document.execCommand('copy'); toast('已复制到剪贴板'); }
+				try { document.execCommand('copy'); toast(note); }
 				catch (e) { toast('复制失败，请手动选择文本', true); }
 				area.remove();
 			}
