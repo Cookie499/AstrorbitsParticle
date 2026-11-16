@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Astrorbits Particle Studio · 粒子可视化编辑器</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<!-- ══════════════ 图标集 ══════════════ -->
+<svg class="sprite" aria-hidden="true">
+<defs>
+  <!-- 模块图标 -->
+  <symbol id="i-cube" viewBox="0 0 24 24"><path d="M12 2.6 20.5 7v10L12 21.4 3.5 17V7z"/><path d="M3.5 7 12 11.6 20.5 7M12 11.6v9.8"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.4"/><path d="M12 7.6V12l3 1.8"/></symbol>
+  <symbol id="i-emission" viewBox="0 0 24 24"><circle cx="12" cy="18.5" r="1.4"/><circle cx="7" cy="14.5" r="1.1"/><circle cx="17" cy="14.5" r="1.1"/><path d="M12 12.4V3.4M8.6 6.6 12 3.2l3.4 3.4"/></symbol>
+  <symbol id="i-gravity" viewBox="0 0 24 24"><path d="M12 3.4v12.2M7.8 11.4 12 15.6l4.2-4.2M3.6 20.4h16.8"/></symbol>
+  <symbol id="i-palette" viewBox="0 0 24 24"><path d="M12 3.4a8.6 8.6 0 1 0 0 17.2c1.3 0 2-.9 2-1.9 0-1.6-1.4-1.8-1.4-3 0-.9.7-1.6 1.7-1.6h1.5c2 0 3.8-1.7 3.8-4.1 0-3.6-3.4-6.6-7.6-6.6z"/><circle cx="8.2" cy="10.2" r="1.1"/><circle cx="11.4" cy="7.4" r="1.1"/><circle cx="15.4" cy="9" r="1.1"/></symbol>
+  <symbol id="i-trail" viewBox="0 0 24 24"><path d="M3.6 18.4c4-1 4.6-9.6 9-10.2 2.8-.4 4.4 2 7.8 1"/><circle cx="4.2" cy="18.2" r="1.5"/><path d="M12.6 16.6h.02M16.4 14.6h.02M20 12.6h.02" stroke-width="2.6"/></symbol>
+  <symbol id="i-splash" viewBox="0 0 24 24"><path d="M12 3.2c3 3.5 5 6 5 8.5a5 5 0 0 1-10 0c0-2.5 2-5 5-8.5z"/><path d="M5 20.2h14M8.4 18.2l-1.2 2M15.6 18.2l1.2 2"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.6 12S6 5.8 12 5.8 21.4 12 21.4 12 18 18.2 12 18.2 2.6 12 2.6 12z"/><circle cx="12" cy="12" r="2.8"/></symbol>
+  <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M3.4 7h17.2M3.4 12h17.2M3.4 17h17.2"/><circle cx="9" cy="7" r="2.1" fill="currentColor" stroke="none"/><circle cx="16" cy="12" r="2.1" fill="currentColor" stroke="none"/><circle cx="7.4" cy="17" r="2.1" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-braces" viewBox="0 0 24 24"><path d="M9 3.6c-2.2 0-3 1-3 3v2c0 1.6-.8 2.4-2.4 3.4 1.6 1 2.4 1.8 2.4 3.4v2c0 2 .8 3 3 3M15 3.6c2.2 0 3 1 3 3v2c0 1.6.8 2.4 2.4 3.4-1.6 1-2.4 1.8-2.4 3.4v2c0 2-.8 3-3 3"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3.4" y="3.4" width="7.2" height="7.2" rx="1"/><rect x="13.4" y="3.4" width="7.2" height="7.2" rx="1"/><rect x="3.4" y="13.4" width="7.2" height="7.2" rx="1"/><rect x="13.4" y="13.4" width="7.2" height="7.2" rx="1"/></symbol>
+  <symbol id="i-dice" viewBox="0 0 24 24"><rect x="3.6" y="3.6" width="16.8" height="16.8" rx="2.4"/><circle cx="8.6" cy="8.6" r="1.3" fill="currentColor" stroke="none"/><circle cx="15.4" cy="15.4" r="1.3" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-camera" viewBox="0 0 24 24"><path d="M3.4 7.6h4l1.6-2.2h6L16.6 7.6h4v11.8H3.4z"/><circle cx="12" cy="13" r="3.4"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M7.2 4.6 19 12 7.2 19.4z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><rect x="6" y="4.8" width="4" height="14.4" fill="currentColor" stroke="none"/><rect x="14" y="4.8" width="4" height="14.4" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-reset" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.4-5.7"/><path d="M20.4 3.6v5h-5"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8.4" y="8.4" width="11.2" height="11.2" rx="1.6"/><path d="M15.6 5.6V4.4H4.4v11.2h1.2"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m4.6 12.4 5 5L19.6 7"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 4.8v14.4M4.8 12h14.4"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M5.6 5.6l12.8 12.8M18.4 5.6 5.6 18.4"/></symbol>
+  <symbol id="i-import" viewBox="0 0 24 24"><path d="M12 3.6v11M7.6 10.4 12 14.8l4.4-4.4M4 19.6h16"/></symbol>
+  <symbol id="i-export" viewBox="0 0 24 24"><path d="M12 14.8v-11M7.6 8 12 3.6 16.4 8M4 19.6h16"/></symbol>
+  <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.6"/><path d="M9.4 9.4a2.7 2.7 0 1 1 3.6 2.5c-.7.3-1 .9-1 1.6v.4"/><circle cx="12" cy="17" r="1" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 3.2 21.4 20H2.6z"/><path d="M12 9.4v4.6"/><circle cx="12" cy="17" r="1" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m8.6 5.6 6.4 6.4-6.4 6.4"/></symbol>
+  <symbol id="i-fx" viewBox="0 0 24 24"><path d="M6 20V8.4C6 5.6 7.4 4 10 4M4.6 10.6h6.8"/><path d="M13.4 20c2.4 0 3.4-1.4 3.4-3.4 0-1.8 1-2.6 2.6-3.6"/></symbol>
+
+  <!-- 样式图标 -->
+  <symbol id="s-radial" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.2" fill="currentColor" stroke="none"/><path d="M12 3v4.2M12 16.8V21M3 12h4.2M16.8 12H21M5.6 5.6l3 3M15.4 15.4l3 3M18.4 5.6l-3 3M8.6 15.4l-3 3"/></symbol>
+  <symbol id="s-sphere" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.4"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="12" cy="3.9" r="1.2" fill="currentColor" stroke="none"/><circle cx="20" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="12" cy="20.1" r="1.2" fill="currentColor" stroke="none"/><circle cx="4" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="17.6" cy="17.6" r="1.2" fill="currentColor" stroke="none"/><circle cx="6.4" cy="6.4" r="1.2" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="s-ring" viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="9" ry="4.4"/><ellipse cx="12" cy="12" rx="4.4" ry="9" opacity=".45"/></symbol>
+  <symbol id="s-fountain" viewBox="0 0 24 24"><path d="M12 20.4V13"/><path d="M12 13c0-4 3-5.6 3-9M12 13c0-3-2.2-4.6-2.2-7.4M12 13c0-4.6 6-6 6-10.4M12 13c0-2-4-3.4-4-6.4"/><circle cx="12" cy="21" r="1.2" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="s-spiral" viewBox="0 0 24 24"><path d="M12 12c0-2 1.6-3.4 3.4-3.4 2.6 0 4.4 2 4.4 4.6 0 3.6-2.8 6.2-6.4 6.2-4.6 0-7.6-3.6-7.6-8 0-5.4 4-9.4 9.4-9.4"/></symbol>
+  <symbol id="s-wave" viewBox="0 0 24 24"><path d="M2.6 14.4c1.6-4.4 3.4-4.4 5 0s3.4 4.4 5 0 3.4-4.4 5 0 2.2 1.6 3.8-.6"/><path d="M2.6 19.4h18.8" opacity=".35"/></symbol>
+  <symbol id="s-comet" viewBox="0 0 24 24"><circle cx="16.6" cy="7.4" r="3.4"/><path d="M13.4 9.6 4 19M15.4 11.4 6.4 20.4M10.6 7.2 3.4 14.4"/></symbol>
+  <symbol id="s-ambience" viewBox="0 0 24 24"><circle cx="7" cy="8" r="1.5" fill="currentColor" stroke="none"/><circle cx="16" cy="6.4" r="1" fill="currentColor" stroke="none"/><circle cx="12.4" cy="13.4" r="1.7" fill="currentColor" stroke="none"/><circle cx="18.4" cy="15.4" r="1.2" fill="currentColor" stroke="none"/><circle cx="6.4" cy="17.4" r="1.1" fill="currentColor" stroke="none"/><circle cx="10.4" cy="19.6" r="0.9" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="s-rain" viewBox="0 0 24 24"><path d="M6 3.4 4.4 9M12 3.4 10.4 9M18 3.4 16.4 9M6 12.4 4.4 18M12 12.4 10.4 18M18 12.4 16.4 18M9 19.4 7.8 23M15 19.4 13.8 23"/></symbol>
+</defs>
+</svg>
+
+<!-- ══════════════ 顶栏 ══════════════ -->
+<header class="topbar">
+  <div class="brand">
+    <svg class="brand-mark"><use href="#i-cube"/></svg>
+    <div class="brand-text">
+      <strong>Astrorbits Particle</strong>
+      <span>粒子可视化编辑器 · 26.2 Fabric</span>
+    </div>
+  </div>
+
+  <div class="topbar-mid">
+    <span class="chip" title="协议版本与随机版本；与模组不一致时客户端会丢弃特效">协议 v5 · rng 1</span>
+    <span class="chip chip-quiet" id="chipStyle">radial_burst</span>
+    <span class="chip chip-quiet" id="chipCount">500 粒子</span>
+  </div>
+
+  <div class="topbar-actions">
+    <label class="seed-field" title="随机种子：决定所有粒子的哈希取数，同一个种子每次得到同一画面">
+      <svg class="ico"><use href="#i-dice"/></svg>
+      <input id="seedInput" value="12345" spellcheck="false" aria-label="随机种子">
+    </label>
+    <button class="btn btn-ghost" id="btnTemplates"><svg class="ico"><use href="#i-grid"/></svg>模板库</button>
+    <button class="btn btn-ghost" id="btnHelp"><svg class="ico"><use href="#i-help"/></svg>说明</button>
+  </div>
+</header>
+
+<!-- ══════════════ 工作区 ══════════════ -->
+<main class="workspace">
+
+  <!-- 左栏 -->
+  <aside class="rail">
+    <section class="rail-block">
+      <h2 class="rail-title"><svg class="ico"><use href="#i-cube"/></svg>样式<span class="rail-note">9 种运动核</span></h2>
+      <div class="style-grid" id="styleGrid"></div>
+    </section>
+
+    <section class="rail-block">
+      <h2 class="rail-title"><svg class="ico"><use href="#i-sliders"/></svg>模块<span class="rail-note">跳转</span></h2>
+      <ul class="module-list" id="moduleList"></ul>
+    </section>
+
+    <section class="rail-block rail-grow">
+      <h2 class="rail-title"><svg class="ico"><use href="#i-grid"/></svg>模板<span class="rail-note" id="presetCount"></span></h2>
+      <div class="preset-list" id="presetList"></div>
+    </section>
+  </aside>
+
+  <!-- 中栏：预览 -->
+  <section class="stage">
+    <div class="stage-head">
+      <div class="stage-title">
+        <span id="stageName">星辉爆发</span>
+        <code id="stageId">astrorbitsparticle:radial_burst</code>
+      </div>
+      <div class="stage-tools">
+        <div class="seg" id="camPresets">
+          <button data-cam="front" title="正面">正</button>
+          <button data-cam="side" title="侧面">侧</button>
+          <button data-cam="top" title="俯视">俯</button>
+          <button data-cam="free" class="on" title="自由视角">自由</button>
+        </div>
+        <button class="btn btn-mini" id="btnFit" title="按包围球重新取景（F）">适配</button>
+        <div class="seg" id="spriteMode">
+          <button data-mode="texture" class="on" title="使用 assets/particles 里的真实贴图">贴图</button>
+          <button data-mode="approx" title="用程序化形状代替贴图，粒子更大更亮，便于看运动">近似</button>
+        </div>
+        <label class="toggle" title="显示地面网格"><input type="checkbox" id="chkGrid" checked><span>网格</span></label>
+        <label class="toggle" title="在 y=0 放一块地面，供 splash 检测落点"><input type="checkbox" id="chkGround"><span>地面</span></label>
+      </div>
+    </div>
+
+    <div class="canvas-wrap">
+      <canvas id="view"></canvas>
+      <div class="hud">
+        <div class="hud-row"><span>帧率</span><b id="hudFps">–</b></div>
+        <div class="hud-row"><span>粒子</span><b id="hudCount">0</b></div>
+        <div class="hud-row"><span>预算</span><b id="hudBudget">0</b></div>
+        <div class="hud-row"><span>步长</span><b id="hudStride">1</b></div>
+        <div class="hud-row"><span>时间</span><b id="hudTime">0.00s</b></div>
+      </div>
+      <div class="canvas-hint">拖拽旋转 · 滚轮缩放 · Shift 拖拽平移</div>
+    </div>
+
+    <div class="transport">
+      <button class="btn btn-play" id="btnPlay" title="播放 / 暂停（空格）"><svg class="ico"><use href="#i-play"/></svg></button>
+      <button class="btn btn-square" id="btnReset" title="回到起点（R）"><svg class="ico"><use href="#i-reset"/></svg></button>
+      <div class="timeline">
+        <input type="range" id="timeRange" min="0" max="4" step="0.001" value="0">
+        <div class="timeline-meta">
+          <span id="timeLabel">0.00 / 4.00 s</span>
+          <span id="timeScaleHint"></span>
+        </div>
+      </div>
+      <label class="toggle" title="播放到结尾后自动从头开始"><input type="checkbox" id="chkPreviewLoop" checked><span>循环预览</span></label>
+      <div class="seg" id="speedSel">
+        <button data-speed="0.25">0.25×</button>
+        <button data-speed="0.5">0.5×</button>
+        <button data-speed="1" class="on">1×</button>
+        <button data-speed="2">2×</button>
+      </div>
+    </div>
+
+    <div class="output">
+      <div class="output-head">
+        <div class="output-tabs" id="outputTabs">
+          <button class="on" data-tab="json">定义 JSON</button>
+          <button data-tab="raw">原始配置</button>
+          <button data-tab="command">游戏内命令</button>
+          <button data-tab="diag">诊断<i class="dot" id="diagDot" hidden></i></button>
+        </div>
+        <div class="output-tools">
+          <label class="name-field" title="保存文件名与定义 id">
+            <span>id</span>
+            <input id="effectName" value="my_effect" spellcheck="false">
+          </label>
+          <button class="btn btn-mini" id="btnImport"><svg class="ico"><use href="#i-import"/></svg>导入</button>
+          <button class="btn btn-mini" id="btnDownload"><svg class="ico"><use href="#i-export"/></svg>下载</button>
+          <button class="btn btn-mini btn-primary" id="btnCopy"><svg class="ico"><use href="#i-copy"/></svg>复制</button>
+        </div>
+      </div>
+      <pre class="output-body" id="outputBody"></pre>
+      <div class="raw-pane" id="rawPane" hidden>
+        <div class="raw-bar">
+          <span id="rawHint">载入时的定义原文；改完点「应用」覆盖当前状态。</span>
+          <button class="btn btn-mini" id="btnRawRefill">重填当前</button>
+          <button class="btn btn-mini btn-primary" id="btnRawApply">应用</button>
+        </div>
+        <textarea id="rawText" spellcheck="false"></textarea>
+      </div>
+    </div>
+  </section>
+
+  <!-- 右栏：Inspector -->
+  <aside class="inspector" id="inspector"></aside>
+</main>
+
+<!-- ══════════════ 模态框 ══════════════ -->
+<div class="modal" id="modal" hidden>
+  <div class="modal-box">
+    <div class="modal-head">
+      <h3 id="modalTitle">模板库</h3>
+      <button class="btn btn-square" id="modalClose" title="关闭"><svg class="ico"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+    <div class="modal-foot" id="modalFoot"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+<div id="bootError" hidden></div>
+
+<script>
+// 脚本出错时给出可见提示，而不是留一块空白面板
+window.addEventListener('error', function (event) {
+	var box = document.getElementById('bootError');
+	if (!box) return;
+	box.hidden = false;
+	box.textContent = '脚本错误：' + (event.message || event.error) +
+		(event.filename ? '（' + String(event.filename).split('/').pop() + ':' + event.lineno + '）' : '');
+	document.title = 'ERR ' + (event.message || '');
+});
+</script>
+<script src="sprites.js"></script>
+<script src="core.js"></script>
+<script src="styles.js"></script>
+<script src="effect.js"></script>
+<script src="presets.js"></script>
+<script src="ui.js"></script>
+</body>
+</html>

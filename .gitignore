@@ -42,3 +42,9 @@ replay_*.log
 .tmp/
 AGENTS.md
 .kotlin/
+
+# web/assets：贴图清单与原版贴图都是本机生成的产物，不进版本库
+# 新克隆的仓库先跑一次 node web/tools/sync-assets.js（加 --vanilla 解出原版贴图）
+web/assets/particles/manifest.js
+web/assets/particles/minecraft/
+web/assets/particles/vanilla-index.json
